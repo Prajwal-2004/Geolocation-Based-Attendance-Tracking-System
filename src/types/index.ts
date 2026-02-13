@@ -10,12 +10,22 @@ export interface User {
   createdAt: string;
 }
 
+export interface PolygonPoint {
+  latitude: number;
+  longitude: number;
+}
+
 export interface Geofence {
   id: string;
   name: string;
+  /** @deprecated Use corners instead for polygon-based geofencing */
   latitude: number;
+  /** @deprecated Use corners instead for polygon-based geofencing */
   longitude: number;
+  /** @deprecated Use corners instead for polygon-based geofencing */
   radiusMeters: number;
+  /** Four corner coordinates defining the classroom boundary */
+  corners?: PolygonPoint[];
   createdBy: string;
   createdAt: string;
   isActive: boolean;

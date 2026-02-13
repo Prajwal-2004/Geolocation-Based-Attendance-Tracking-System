@@ -91,16 +91,19 @@ const Dashboard = () => {
       if (!matched) {
         const nearest = geofences[0];
         const result = validateLocation(location, nearest);
+        const reason = nearest.corners && nearest.corners.length >= 3
+          ? `Outside classroom boundary (${result.distance}m from center)`
+          : `Outside geofence boundary (${result.distance}m from center, max ${nearest.radiusMeters}m)`;
         addAttendanceRecord({
           userId: user.id, userName: user.name, userRole: user.role,
           geofenceId: nearest.id, geofenceName: nearest.name,
           checkInTime: new Date().toISOString(),
           latitude: location.latitude, longitude: location.longitude,
           distanceFromCenter: result.distance, status: 'rejected',
-          rejectionReason: `Outside geofence boundary (${result.distance}m from center, max ${nearest.radiusMeters}m)`,
+          rejectionReason: reason,
         });
         addAnomaly({ userId: user.id, userName: user.name, type: 'out_of_range', description: `User is ${result.distance}m from ${nearest.name}`, timestamp: new Date().toISOString(), locationData: location });
-        toast({ title: 'Check-in rejected', description: `You are ${result.distance}m away from the nearest zone.`, variant: 'destructive' });
+        toast({ title: 'Check-in rejected', description: `You are outside the ${nearest.name} boundary.`, variant: 'destructive' });
       }
     } catch (err: any) {
       toast({ title: 'Error', description: err.message, variant: 'destructive' });

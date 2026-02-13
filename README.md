@@ -1,6 +1,6 @@
 # GeoAttend — Geolocation-Based Attendance Tracking System
 
-A mobile-first attendance tracking application that uses real-time GPS coordinates and geofencing to verify user presence before logging attendance. Built with React, TypeScript, and Tailwind CSS, designed to run as a native mobile app via Capacitor.
+A mobile-first attendance tracking application that uses real-time GPS coordinates and polygon-based geofencing to verify user presence before logging attendance. Built with React, TypeScript, and Tailwind CSS, designed to run as a native mobile app via Capacitor.
 
 ---
 
@@ -8,7 +8,9 @@ A mobile-first attendance tracking application that uses real-time GPS coordinat
 
 - **Role-based authentication** (Student, Faculty, Admin)
 - **GPS-based check-in/check-out** with real-time location capture
-- **Geofence validation** using the Haversine formula
+- **4-corner polygon geofencing** — admin defines classroom boundaries using 4 coordinate points
+- **Ray Casting algorithm** for point-in-polygon validation
+- **Haversine formula** for distance calculation and reporting
 - **Anti-spoofing measures** — timestamp consistency checks, GPS accuracy validation
 - **Admin dashboard** — geofence configuration, attendance records, anomaly reports, user management
 - **Duplicate prevention** — prevents multiple active check-ins
@@ -31,14 +33,14 @@ A mobile-first attendance tracking application that uses real-time GPS coordinat
 
 | File | Purpose |
 |------|---------|
-| `src/types/index.ts` | TypeScript type definitions for `User`, `Geofence`, `AttendanceRecord`, `LocationData`, and `AnomalyLog`. Central schema for all data structures. |
+| `src/types/index.ts` | TypeScript type definitions for `User`, `Geofence` (with `PolygonPoint[]` corners), `AttendanceRecord`, `LocationData`, and `AnomalyLog`. Central schema for all data structures. |
 
 ### Core Logic (Business Logic Layer)
 
 | File | Purpose |
 |------|---------|
 | `src/lib/storage.ts` | **Backend & Database Module** — Manages all data persistence via localStorage. Provides CRUD operations for users, geofences, attendance records, and anomalies. Handles user registration and login with base64 password encoding. Seeds a default admin account on first run. |
-| `src/lib/geofence.ts` | **Location & Geofence Validation Module** — Implements the **Haversine formula** for calculating distances between GPS coordinates. Contains `validateLocation()` for geofence boundary checking, `validateTimestamp()` and `checkGpsAccuracy()` for anti-spoofing, and `getCurrentLocation()` wrapper for the browser Geolocation API. |
+| `src/lib/geofence.ts` | **Location & Geofence Validation Module** — Implements the **Haversine formula** for distance calculation, the **Ray Casting algorithm** for polygon-based boundary checking, `validateLocation()` with support for both polygon and circular geofences, `validateTimestamp()` and `checkGpsAccuracy()` for anti-spoofing, and `getCurrentLocation()` wrapper for the browser Geolocation API. |
 
 ### Authentication
 
@@ -53,7 +55,7 @@ A mobile-first attendance tracking application that uses real-time GPS coordinat
 | `src/pages/Login.tsx` | Login screen with email/password form, show/hide password toggle, demo admin credentials, and link to registration. |
 | `src/pages/Register.tsx` | Registration screen with role selection (Student/Faculty), department, and optional student ID fields. |
 | `src/pages/Dashboard.tsx` | **Attendance Management Module** — Student/Faculty dashboard. Shows check-in/check-out button with pulsing animation, current status, today's stats, and recent attendance history. Orchestrates the full check-in flow: location capture → anti-spoofing validation → geofence matching → record creation or rejection. |
-| `src/pages/AdminDashboard.tsx` | **Admin Dashboard & Reporting Module** — Tabbed interface with: (1) Geofence zone management (add/delete/toggle), (2) Attendance records with distance and status, (3) Anomaly flags with type labels, (4) User list with roles. Shows aggregate statistics at the top. |
+| `src/pages/AdminDashboard.tsx` | **Admin Dashboard & Reporting Module** — Tabbed interface with: (1) Geofence zone management with 4-corner coordinate input, (2) Attendance records with distance and status, (3) Anomaly flags with type labels, (4) User list with roles. Shows aggregate statistics at the top. |
 | `src/pages/NotFound.tsx` | 404 fallback page. |
 
 ### Design System
@@ -69,69 +71,144 @@ All files in `src/components/ui/` are pre-built, accessible UI primitives from s
 
 ---
 
+## 🧮 Algorithms Used
+
+### 1. Haversine Formula (Distance Calculation)
+
+The Haversine formula calculates the **great-circle distance** between two points on Earth given their latitude and longitude. Used to report how far a student is from the classroom center.
+
+**Formula:**
+```
+a = sin²(Δlat/2) + cos(lat1) · cos(lat2) · sin²(Δlon/2)
+c = 2 · atan2(√a, √(1−a))
+d = R · c
+```
+
+Where **R = 6,371,000 meters** (Earth's radius). The result `d` gives the distance in meters.
+
+**Used in:** `src/lib/geofence.ts` → `haversineDistance()`
+
+---
+
+### 2. Ray Casting Algorithm (Point-in-Polygon Check)
+
+The Ray Casting algorithm determines whether a point (student's GPS location) lies **inside** a polygon (classroom boundary defined by 4 corners).
+
+**How it works:**
+1. Cast an imaginary horizontal ray from the student's GPS point to the right.
+2. Count how many edges of the polygon the ray crosses.
+3. **Odd crossings → inside** the polygon. **Even crossings → outside**.
+
+```
+Corner B ────────── Corner C
+   |    📍 Student    |      ← Ray crosses 1 edge → INSIDE ✅
+   |                  |
+Corner A ────────── Corner D
+```
+
+**Why it works:** Entering a closed polygon always requires crossing one edge. Exiting adds another crossing. Therefore:
+- 0 crossings = outside
+- 1 crossing = **inside**
+- 2 crossings = outside
+- 3 crossings = **inside**
+- ... (odd = inside, even = outside)
+
+**For each edge**, the algorithm checks:
+1. Is the point's latitude **between** the edge's two endpoints? (vertical range)
+2. Is the point **to the left** of the intersection? (horizontal check)
+
+**Accuracy Note:** At classroom scale (~10-50m), the Earth's curvature is negligible, so treating lat/lng as flat 2D coordinates is perfectly valid.
+
+**Used in:** `src/lib/geofence.ts` → `pointInPolygon()`
+
+---
+
+### 3. Anti-Spoofing Checks
+
+| Check | Description | File |
+|-------|-------------|------|
+| Timestamp Consistency | Rejects if client timestamp drifts >30 seconds from server time | `validateTimestamp()` |
+| GPS Accuracy | Flags suspiciously perfect accuracy (<1m), common in GPS spoofing tools | `checkGpsAccuracy()` |
+
+---
+
 ## 🚀 How to Run This Project
 
-### Option 1: Run in Browser (Development)
+### Prerequisites
+- **Node.js** (v18+) and **npm** installed — [Download](https://nodejs.org/)
+- **VS Code** — [Download](https://code.visualstudio.com/)
+- **Git** — [Download](https://git-scm.com/)
+
+### Step-by-Step: Running in VS Code
 
 ```bash
 # 1. Clone the repository
 git clone <YOUR_GIT_URL>
 cd <YOUR_PROJECT_NAME>
 
-# 2. Install dependencies
+# 2. Open in VS Code
+code .
+
+# 3. Open a terminal in VS Code (Ctrl + ` or Terminal → New Terminal)
+
+# 4. Install dependencies
 npm install
 
-# 3. Start dev server
+# 5. Start the development server
 npm run dev
 
-# 4. Open http://localhost:8080 in your browser
+# 6. Open http://localhost:8080 in your browser
+#    The app will auto-reload when you make changes.
 ```
 
-### Option 2: Run as a Native Mobile App (Capacitor)
+### VS Code Recommended Extensions
+- **ES7+ React/Redux/React-Native snippets** — React code shortcuts
+- **Tailwind CSS IntelliSense** — Autocomplete for Tailwind classes
+- **TypeScript Importer** — Auto-import TypeScript modules
+- **Prettier** — Code formatting
+
+---
+
+### Running as a Native Mobile App (Capacitor)
 
 This is the recommended approach to run the app on an actual phone.
 
 #### Prerequisites
-- **Node.js** (v18+) and **npm** installed
 - **Android Studio** (for Android) — [Download](https://developer.android.com/studio)
 - **Xcode** (for iOS, Mac only) — [Download from Mac App Store](https://apps.apple.com/app/xcode/id497799835)
 
 #### Step-by-Step Setup
 
 ```bash
-# 1. Clone and install
-git clone <YOUR_GIT_URL>
-cd <YOUR_PROJECT_NAME>
-npm install
-
-# 2. Install Capacitor
+# 1. Install Capacitor
 npm install @capacitor/core @capacitor/cli @capacitor/ios @capacitor/android
 
-# 3. Initialize Capacitor
+# 2. Initialize Capacitor
 npx cap init "GeoAttend" "app.geoattend.mobile" --web-dir dist
 
-# 4. Build the web app
+# 3. Build the web app
 npm run build
 
-# 5. Add mobile platforms
+# 4. Add mobile platforms
 npx cap add android    # For Android
 npx cap add ios        # For iOS (Mac only)
 
-# 6. Sync web code to native projects
+# 5. Sync web code to native projects
 npx cap sync
 
-# 7. Open in native IDE
+# 6. Open in native IDE
 npx cap open android   # Opens Android Studio
 npx cap open ios       # Opens Xcode
 ```
 
-#### Running on Android
+#### Running on Android Phone
 1. Open the project in **Android Studio** (`npx cap open android`)
-2. Connect your Android phone via USB (enable Developer Mode + USB Debugging)
+2. Connect your Android phone via USB (enable **Developer Mode** + **USB Debugging**)
 3. Click the **Run** button (green play icon) and select your device
 4. The app will install and launch on your phone
+5. Grant **Location permissions** when prompted
 
-#### Running on iOS
+#### Running on iOS (iPhone)
 1. Open the project in **Xcode** (`npx cap open ios`)
 2. Select your development team in **Signing & Capabilities**
 3. Connect your iPhone via USB
@@ -162,7 +239,8 @@ Students and faculty can register via the registration page.
 ```
 ┌──────────────────┐     ┌───────────────────┐     ┌──────────────────┐
 │   Mobile App     │────▶│  Geofence Engine   │────▶│  localStorage    │
-│  (React + Cap.)  │     │  (Haversine calc)  │     │  (JSON storage)  │
+│  (React + Cap.)  │     │  (Ray Casting +    │     │  (JSON storage)  │
+│                  │     │   Haversine calc)  │     │                  │
 └──────────────────┘     └───────────────────┘     └──────────────────┘
         │                         │
         ▼                         ▼
@@ -173,19 +251,31 @@ Students and faculty can register via the registration page.
 └──────────────────┘     └───────────────────┘
 ```
 
----
-
-## 🧮 Haversine Formula
-
-The system validates attendance by computing the great-circle distance between the user's GPS coordinates and the geofence center:
+### Validation Flow
 
 ```
-a = sin²(Δlat/2) + cos(lat1) · cos(lat2) · sin²(Δlon/2)
-c = 2 · atan2(√a, √(1−a))
-d = R · c
+Student taps "Check In"
+        │
+        ▼
+  Capture GPS coordinates
+        │
+        ▼
+  Anti-spoofing checks
+  (timestamp + accuracy)
+        │
+        ▼
+  For each active geofence:
+    Run Ray Casting algorithm
+    (Is student inside the 4-corner polygon?)
+        │
+    ┌───┴───┐
+    YES     NO
+    │       │
+    ▼       ▼
+  Log      Try next zone
+  valid    or reject
+  attendance
 ```
-
-Where **R = 6,371,000 meters** (Earth's radius). If **d ≤ geofence radius**, attendance is accepted.
 
 ---
 
