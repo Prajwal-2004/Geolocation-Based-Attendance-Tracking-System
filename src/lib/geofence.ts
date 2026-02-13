@@ -1,4 +1,4 @@
-import { LocationData, Geofence } from '@/types';
+import { LocationData, Geofence, PolygonPoint } from '@/types';
 
 /**
  * Haversine formula: calculates the great-circle distance between two points
@@ -24,12 +24,70 @@ export function haversineDistance(
 }
 
 /**
+ * Ray Casting Algorithm: determines if a point lies inside a polygon.
+ * 
+ * How it works:
+ * 1. Cast an imaginary horizontal ray from the point to the right.
+ * 2. Count how many edges of the polygon the ray crosses.
+ * 3. If the count is odd, the point is inside; if even, it's outside.
+ * 
+ * This works because entering a polygon always adds one crossing,
+ * and exiting adds another. So inside = odd crossings.
+ */
+export function pointInPolygon(
+  point: { latitude: number; longitude: number },
+  polygon: PolygonPoint[]
+): boolean {
+  let inside = false;
+  const n = polygon.length;
+
+  for (let i = 0, j = n - 1; i < n; j = i++) {
+    const xi = polygon[i].latitude, yi = polygon[i].longitude;
+    const xj = polygon[j].latitude, yj = polygon[j].longitude;
+
+    // Check if the ray crosses this edge
+    const intersect =
+      yi > point.longitude !== yj > point.longitude &&
+      point.latitude < ((xj - xi) * (point.longitude - yi)) / (yj - yi) + xi;
+
+    if (intersect) inside = !inside;
+  }
+
+  return inside;
+}
+
+/**
+ * Calculates the centroid (geometric center) of a polygon.
+ */
+export function getPolygonCenter(corners: PolygonPoint[]): { latitude: number; longitude: number } {
+  const lat = corners.reduce((sum, c) => sum + c.latitude, 0) / corners.length;
+  const lon = corners.reduce((sum, c) => sum + c.longitude, 0) / corners.length;
+  return { latitude: lat, longitude: lon };
+}
+
+/**
  * Validates whether a user's location falls within a geofence boundary.
+ * Supports both polygon (4-corner) and legacy circular geofences.
  */
 export function validateLocation(
   location: LocationData,
   geofence: Geofence
 ): { isValid: boolean; distance: number } {
+  if (geofence.corners && geofence.corners.length >= 3) {
+    // Polygon-based validation using Ray Casting
+    const isInside = pointInPolygon(
+      { latitude: location.latitude, longitude: location.longitude },
+      geofence.corners
+    );
+    const center = getPolygonCenter(geofence.corners);
+    const distance = haversineDistance(
+      location.latitude, location.longitude,
+      center.latitude, center.longitude
+    );
+    return { isValid: isInside, distance: Math.round(distance) };
+  }
+
+  // Legacy circular geofence fallback
   const distance = haversineDistance(
     location.latitude, location.longitude,
     geofence.latitude, geofence.longitude
@@ -55,7 +113,6 @@ export function validateTimestamp(clientTimestamp: number): boolean {
  * Mock GPS tools often report accuracy of exactly 0 or very high precision.
  */
 export function checkGpsAccuracy(accuracy: number): boolean {
-  // Accuracy of 0 or less than 1 meter is suspicious
   return accuracy > 1;
 }
 

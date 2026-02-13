@@ -22,24 +22,39 @@ const AdminDashboard = () => {
   const [anomalies] = useState<AnomalyLog[]>(() => getAnomalies().reverse());
   const [users] = useState<AppUser[]>(getUsers);
 
-  // Geofence form
+  // Geofence form — 4 corners
   const [gName, setGName] = useState('');
-  const [gLat, setGLat] = useState('');
-  const [gLon, setGLon] = useState('');
-  const [gRadius, setGRadius] = useState('100');
+  const [c1Lat, setC1Lat] = useState(''); const [c1Lon, setC1Lon] = useState('');
+  const [c2Lat, setC2Lat] = useState(''); const [c2Lon, setC2Lon] = useState('');
+  const [c3Lat, setC3Lat] = useState(''); const [c3Lon, setC3Lon] = useState('');
+  const [c4Lat, setC4Lat] = useState(''); const [c4Lon, setC4Lon] = useState('');
 
   const handleAddGeofence = (e: React.FormEvent) => {
     e.preventDefault();
+    const corners = [
+      { latitude: parseFloat(c1Lat), longitude: parseFloat(c1Lon) },
+      { latitude: parseFloat(c2Lat), longitude: parseFloat(c2Lon) },
+      { latitude: parseFloat(c3Lat), longitude: parseFloat(c3Lon) },
+      { latitude: parseFloat(c4Lat), longitude: parseFloat(c4Lon) },
+    ];
+    // Compute center for legacy compatibility
+    const centerLat = corners.reduce((s, c) => s + c.latitude, 0) / 4;
+    const centerLon = corners.reduce((s, c) => s + c.longitude, 0) / 4;
     const g = addGeofence({
       name: gName,
-      latitude: parseFloat(gLat),
-      longitude: parseFloat(gLon),
-      radiusMeters: parseInt(gRadius),
+      latitude: centerLat,
+      longitude: centerLon,
+      radiusMeters: 0,
+      corners,
       createdBy: user!.id,
       isActive: true,
     });
     setGeofences([...geofences, g]);
-    setGName(''); setGLat(''); setGLon(''); setGRadius('100');
+    setGName('');
+    setC1Lat(''); setC1Lon('');
+    setC2Lat(''); setC2Lon('');
+    setC3Lat(''); setC3Lon('');
+    setC4Lat(''); setC4Lon('');
     toast({ title: 'Geofence created', description: g.name });
   };
 
@@ -55,23 +70,26 @@ const AdminDashboard = () => {
   };
 
   const validCount = records.filter(r => r.status === 'valid').length;
-  const rejectedCount = records.filter(r => r.status === 'rejected').length;
   const todayCount = records.filter(r => new Date(r.checkInTime).toDateString() === new Date().toDateString()).length;
+
+  const formatCorners = (g: Geofence) => {
+    if (g.corners && g.corners.length === 4) {
+      return g.corners.map((c, i) => `C${i + 1}(${c.latitude.toFixed(4)}, ${c.longitude.toFixed(4)})`).join(' • ');
+    }
+    return `${g.latitude.toFixed(4)}, ${g.longitude.toFixed(4)} • ${g.radiusMeters}m`;
+  };
 
   return (
     <div className="min-h-screen bg-background">
-      {/* Header */}
       <header className="sticky top-0 z-10 border-b border-border/50 bg-card/80 backdrop-blur-md">
         <div className="flex items-center justify-between p-4">
           <div className="flex items-center gap-3">
             <Button variant="ghost" size="icon" onClick={() => navigate('/dashboard')}>
               <ArrowLeft className="h-5 w-5" />
             </Button>
-            <div>
-              <h1 className="text-lg font-bold flex items-center gap-2">
-                <Shield className="h-5 w-5 text-primary" /> Admin Panel
-              </h1>
-            </div>
+            <h1 className="text-lg font-bold flex items-center gap-2">
+              <Shield className="h-5 w-5 text-primary" /> Admin Panel
+            </h1>
           </div>
           <Button variant="ghost" size="icon" onClick={() => { logout(); navigate('/login'); }}>
             <LogOut className="h-5 w-5" />
@@ -111,15 +129,35 @@ const AdminDashboard = () => {
           {/* Geofences Tab */}
           <TabsContent value="geofences" className="space-y-4">
             <Card className="border-border/50">
-              <CardHeader><CardTitle className="text-base">Add Geofence Zone</CardTitle></CardHeader>
+              <CardHeader><CardTitle className="text-base">Add Geofence Zone (4 Corners)</CardTitle></CardHeader>
               <CardContent>
                 <form onSubmit={handleAddGeofence} className="space-y-3">
-                  <Input placeholder="Zone name (e.g., Main Building)" value={gName} onChange={e => setGName(e.target.value)} required className="bg-secondary/50" />
+                  <Input placeholder="Zone name (e.g., Room 101)" value={gName} onChange={e => setGName(e.target.value)} required className="bg-secondary/50" />
+                  
+                  <p className="text-xs text-muted-foreground font-medium">Corner 1 (e.g., Front-Left)</p>
                   <div className="grid grid-cols-2 gap-3">
-                    <Input placeholder="Latitude" type="number" step="any" value={gLat} onChange={e => setGLat(e.target.value)} required className="bg-secondary/50" />
-                    <Input placeholder="Longitude" type="number" step="any" value={gLon} onChange={e => setGLon(e.target.value)} required className="bg-secondary/50" />
+                    <Input placeholder="Latitude" type="number" step="any" value={c1Lat} onChange={e => setC1Lat(e.target.value)} required className="bg-secondary/50" />
+                    <Input placeholder="Longitude" type="number" step="any" value={c1Lon} onChange={e => setC1Lon(e.target.value)} required className="bg-secondary/50" />
                   </div>
-                  <Input placeholder="Radius (meters)" type="number" value={gRadius} onChange={e => setGRadius(e.target.value)} required className="bg-secondary/50" />
+
+                  <p className="text-xs text-muted-foreground font-medium">Corner 2 (e.g., Front-Right)</p>
+                  <div className="grid grid-cols-2 gap-3">
+                    <Input placeholder="Latitude" type="number" step="any" value={c2Lat} onChange={e => setC2Lat(e.target.value)} required className="bg-secondary/50" />
+                    <Input placeholder="Longitude" type="number" step="any" value={c2Lon} onChange={e => setC2Lon(e.target.value)} required className="bg-secondary/50" />
+                  </div>
+
+                  <p className="text-xs text-muted-foreground font-medium">Corner 3 (e.g., Back-Right)</p>
+                  <div className="grid grid-cols-2 gap-3">
+                    <Input placeholder="Latitude" type="number" step="any" value={c3Lat} onChange={e => setC3Lat(e.target.value)} required className="bg-secondary/50" />
+                    <Input placeholder="Longitude" type="number" step="any" value={c3Lon} onChange={e => setC3Lon(e.target.value)} required className="bg-secondary/50" />
+                  </div>
+
+                  <p className="text-xs text-muted-foreground font-medium">Corner 4 (e.g., Back-Left)</p>
+                  <div className="grid grid-cols-2 gap-3">
+                    <Input placeholder="Latitude" type="number" step="any" value={c4Lat} onChange={e => setC4Lat(e.target.value)} required className="bg-secondary/50" />
+                    <Input placeholder="Longitude" type="number" step="any" value={c4Lon} onChange={e => setC4Lon(e.target.value)} required className="bg-secondary/50" />
+                  </div>
+
                   <Button type="submit" className="w-full"><Plus className="mr-2 h-4 w-4" /> Add Zone</Button>
                 </form>
               </CardContent>
@@ -131,7 +169,7 @@ const AdminDashboard = () => {
                     <MapPin className={`h-5 w-5 shrink-0 ${g.isActive ? 'text-primary' : 'text-muted-foreground'}`} />
                     <div className="flex-1 min-w-0">
                       <p className="text-sm font-medium">{g.name}</p>
-                      <p className="text-xs text-muted-foreground">{g.latitude.toFixed(4)}, {g.longitude.toFixed(4)} • {g.radiusMeters}m</p>
+                      <p className="text-xs text-muted-foreground break-all">{formatCorners(g)}</p>
                     </div>
                     <Switch checked={g.isActive} onCheckedChange={v => handleToggleGeofence(g.id, v)} />
                     <Button variant="ghost" size="icon" onClick={() => handleDeleteGeofence(g.id)}>
