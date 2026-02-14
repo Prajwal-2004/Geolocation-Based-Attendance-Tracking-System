@@ -3,12 +3,12 @@ import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { LogIn, LogOut, Clock, CheckCircle2, XCircle, Navigation, Menu, Shield } from 'lucide-react';
+import { LogIn, LogOut, Clock, CheckCircle2, XCircle, Navigation, Menu, Shield, MapPin, Crosshair } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { getCurrentLocation } from '@/lib/geofence';
 import { validateLocation, validateTimestamp, checkGpsAccuracy } from '@/lib/geofence';
 import { getGeofences, getAttendanceRecords, addAttendanceRecord, updateAttendanceRecord, addAnomaly } from '@/lib/storage';
-import { AttendanceRecord } from '@/types';
+import { AttendanceRecord, LocationData } from '@/types';
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from '@/components/ui/sheet';
 import { useNavigate } from 'react-router-dom';
 
@@ -17,6 +17,8 @@ const Dashboard = () => {
   const { toast } = useToast();
   const navigate = useNavigate();
   const [isLoading, setIsLoading] = useState(false);
+  const [isCapturing, setIsCapturing] = useState(false);
+  const [capturedLocation, setCapturedLocation] = useState<LocationData | null>(null);
   const [records, setRecords] = useState<AttendanceRecord[]>(() =>
     getAttendanceRecords().filter(r => r.userId === user?.id).reverse()
   );
@@ -24,11 +26,24 @@ const Dashboard = () => {
   const isAdmin = user?.role === 'admin';
   const activeCheckIn = records.find(r => r.status === 'valid' && !r.checkOutTime);
 
-  const handleCheckIn = async () => {
-    if (!user) return;
-    setIsLoading(true);
+  const handleCaptureLocation = async () => {
+    setIsCapturing(true);
+    setCapturedLocation(null);
     try {
       const location = await getCurrentLocation();
+      setCapturedLocation(location);
+      toast({ title: 'Location captured', description: 'Your GPS coordinates have been acquired.' });
+    } catch (err: any) {
+      toast({ title: 'Error', description: err.message, variant: 'destructive' });
+    }
+    setIsCapturing(false);
+  };
+
+  const handleCheckIn = async () => {
+    if (!user || !capturedLocation) return;
+    setIsLoading(true);
+    try {
+      const location = capturedLocation;
 
       if (!validateTimestamp(location.timestamp)) {
         addAnomaly({ userId: user.id, userName: user.name, type: 'timestamp_mismatch', description: 'Client timestamp drift exceeds 30s', timestamp: new Date().toISOString(), locationData: location });
@@ -68,19 +83,15 @@ const Dashboard = () => {
         const result = validateLocation(location, geofence);
         if (result.isValid) {
           const record = addAttendanceRecord({
-            userId: user.id,
-            userName: user.name,
-            userRole: user.role,
-            geofenceId: geofence.id,
-            geofenceName: geofence.name,
+            userId: user.id, userName: user.name, userRole: user.role,
+            geofenceId: geofence.id, geofenceName: geofence.name,
             checkInTime: new Date().toISOString(),
-            latitude: location.latitude,
-            longitude: location.longitude,
-            distanceFromCenter: result.distance,
-            status: 'valid',
+            latitude: location.latitude, longitude: location.longitude,
+            distanceFromCenter: result.distance, status: 'valid',
           });
           setRecords([record, ...records]);
           matched = true;
+          setCapturedLocation(null);
           toast({ title: 'Checked in!', description: `${geofence.name} — ${result.distance}m from center` });
           break;
         }
@@ -101,6 +112,7 @@ const Dashboard = () => {
           rejectionReason: reason,
         });
         addAnomaly({ userId: user.id, userName: user.name, type: 'out_of_range', description: `User is ${result.distance}m from ${nearest.name}`, timestamp: new Date().toISOString(), locationData: location });
+        setCapturedLocation(null);
         toast({ title: 'Check-in rejected', description: `You are outside the ${nearest.name} boundary.`, variant: 'destructive' });
       }
     } catch (err: any) {
@@ -165,20 +177,24 @@ const Dashboard = () => {
         {/* Status Card — hidden for admins */}
         {!isAdmin && (
           <Card className="border-border/30 overflow-hidden shadow-xl shadow-primary/5">
-            <div className={`h-1 ${activeCheckIn ? 'bg-primary' : 'bg-muted-foreground/20'}`} />
+            <div className={`h-1 ${activeCheckIn ? 'bg-primary' : capturedLocation ? 'bg-accent' : 'bg-muted-foreground/20'}`} />
             <CardContent className="p-8 text-center space-y-5">
               <div className="relative mx-auto w-24 h-24 flex items-center justify-center">
                 {activeCheckIn && (
                   <div className="absolute inset-0 rounded-full border-2 border-primary animate-pulse-ring" />
                 )}
-                <div className={`rounded-full p-5 transition-all ${activeCheckIn ? 'bg-primary/15 border-2 border-primary shadow-lg shadow-primary/20' : 'bg-secondary border-2 border-border/50'}`}>
-                  <Navigation className={`h-8 w-8 ${activeCheckIn ? 'text-primary' : 'text-muted-foreground'}`} />
+                <div className={`rounded-full p-5 transition-all ${activeCheckIn ? 'bg-primary/15 border-2 border-primary shadow-lg shadow-primary/20' : capturedLocation ? 'bg-accent/15 border-2 border-accent' : 'bg-secondary border-2 border-border/50'}`}>
+                  {capturedLocation && !activeCheckIn ? (
+                    <MapPin className="h-8 w-8 text-accent" />
+                  ) : (
+                    <Navigation className={`h-8 w-8 ${activeCheckIn ? 'text-primary' : 'text-muted-foreground'}`} />
+                  )}
                 </div>
               </div>
               <div>
                 <p className="text-xs text-muted-foreground uppercase tracking-wider">Current Status</p>
                 <p className="text-xl font-bold mt-1">
-                  {activeCheckIn ? 'Checked In' : 'Not Checked In'}
+                  {activeCheckIn ? 'Checked In' : capturedLocation ? 'Location Captured' : 'Not Checked In'}
                 </p>
                 {activeCheckIn && (
                   <p className="text-xs text-muted-foreground mt-1">
@@ -186,13 +202,52 @@ const Dashboard = () => {
                   </p>
                 )}
               </div>
+
+              {/* Captured Location Details */}
+              {capturedLocation && !activeCheckIn && (
+                <div className="rounded-xl bg-secondary/50 p-4 text-left space-y-2 border border-border/30">
+                  <div className="flex items-center gap-2 mb-2">
+                    <Crosshair className="h-4 w-4 text-accent" />
+                    <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Your Location</p>
+                  </div>
+                  <div className="grid grid-cols-2 gap-2 text-sm">
+                    <div>
+                      <p className="text-[10px] text-muted-foreground uppercase">Latitude</p>
+                      <p className="font-mono font-medium">{capturedLocation.latitude.toFixed(6)}</p>
+                    </div>
+                    <div>
+                      <p className="text-[10px] text-muted-foreground uppercase">Longitude</p>
+                      <p className="font-mono font-medium">{capturedLocation.longitude.toFixed(6)}</p>
+                    </div>
+                    <div>
+                      <p className="text-[10px] text-muted-foreground uppercase">Accuracy</p>
+                      <p className="font-mono font-medium">{capturedLocation.accuracy.toFixed(1)}m</p>
+                    </div>
+                    <div>
+                      <p className="text-[10px] text-muted-foreground uppercase">Time</p>
+                      <p className="font-mono font-medium">{new Date(capturedLocation.timestamp).toLocaleTimeString()}</p>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Action Buttons */}
               {activeCheckIn ? (
                 <Button onClick={handleCheckOut} disabled={isLoading} variant="destructive" className="w-full h-12 font-semibold rounded-xl shadow-lg" size="lg">
                   <LogOut className="mr-2 h-5 w-5" /> {isLoading ? 'Processing...' : 'Check Out'}
                 </Button>
+              ) : capturedLocation ? (
+                <div className="space-y-2">
+                  <Button onClick={handleCheckIn} disabled={isLoading} className="w-full h-12 font-semibold rounded-xl shadow-lg shadow-primary/20" size="lg">
+                    <LogIn className="mr-2 h-5 w-5" /> {isLoading ? 'Verifying...' : 'Check In'}
+                  </Button>
+                  <Button onClick={handleCaptureLocation} disabled={isCapturing} variant="outline" className="w-full rounded-xl" size="sm">
+                    <Crosshair className="mr-2 h-4 w-4" /> {isCapturing ? 'Recapturing...' : 'Recapture Location'}
+                  </Button>
+                </div>
               ) : (
-                <Button onClick={handleCheckIn} disabled={isLoading} className="w-full h-12 font-semibold rounded-xl shadow-lg shadow-primary/20" size="lg">
-                  <LogIn className="mr-2 h-5 w-5" /> {isLoading ? 'Locating...' : 'Check In'}
+                <Button onClick={handleCaptureLocation} disabled={isCapturing} className="w-full h-12 font-semibold rounded-xl shadow-lg shadow-primary/20" size="lg">
+                  <Crosshair className="mr-2 h-5 w-5" /> {isCapturing ? 'Capturing...' : 'Capture Location'}
                 </Button>
               )}
             </CardContent>
