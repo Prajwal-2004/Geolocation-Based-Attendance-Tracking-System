@@ -1,9 +1,9 @@
 import { useState } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { MapPin, LogIn, LogOut, Clock, CheckCircle2, XCircle, Navigation, Menu } from 'lucide-react';
+import { LogIn, LogOut, Clock, CheckCircle2, XCircle, Navigation, Menu, Shield } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { getCurrentLocation } from '@/lib/geofence';
 import { validateLocation, validateTimestamp, checkGpsAccuracy } from '@/lib/geofence';
@@ -21,6 +21,7 @@ const Dashboard = () => {
     getAttendanceRecords().filter(r => r.userId === user?.id).reverse()
   );
 
+  const isAdmin = user?.role === 'admin';
   const activeCheckIn = records.find(r => r.status === 'valid' && !r.checkOutTime);
 
   const handleCheckIn = async () => {
@@ -29,7 +30,6 @@ const Dashboard = () => {
     try {
       const location = await getCurrentLocation();
 
-      // Anti-spoofing checks
       if (!validateTimestamp(location.timestamp)) {
         addAnomaly({ userId: user.id, userName: user.name, type: 'timestamp_mismatch', description: 'Client timestamp drift exceeds 30s', timestamp: new Date().toISOString(), locationData: location });
         toast({ title: 'Check-in rejected', description: 'Timestamp mismatch detected.', variant: 'destructive' });
@@ -51,7 +51,6 @@ const Dashboard = () => {
         return;
       }
 
-      // Check duplicate
       const todayRecords = getAttendanceRecords().filter(r =>
         r.userId === user.id &&
         r.status === 'valid' &&
@@ -64,7 +63,6 @@ const Dashboard = () => {
         return;
       }
 
-      // Validate against geofences
       let matched = false;
       for (const geofence of geofences) {
         const result = validateLocation(location, geofence);
@@ -115,12 +113,11 @@ const Dashboard = () => {
     if (!activeCheckIn) return;
     setIsLoading(true);
     try {
-      const location = await getCurrentLocation();
+      await getCurrentLocation();
       updateAttendanceRecord(activeCheckIn.id, { checkOutTime: new Date().toISOString() });
       setRecords(prev => prev.map(r => r.id === activeCheckIn.id ? { ...r, checkOutTime: new Date().toISOString() } : r));
       toast({ title: 'Checked out!', description: 'Your attendance has been recorded.' });
-    } catch (err: any) {
-      // Allow check-out even without location
+    } catch {
       updateAttendanceRecord(activeCheckIn.id, { checkOutTime: new Date().toISOString() });
       setRecords(prev => prev.map(r => r.id === activeCheckIn.id ? { ...r, checkOutTime: new Date().toISOString() } : r));
       toast({ title: 'Checked out', description: 'Location unavailable, but check-out recorded.' });
@@ -133,32 +130,29 @@ const Dashboard = () => {
   return (
     <div className="min-h-screen bg-background">
       {/* Header */}
-      <header className="sticky top-0 z-10 border-b border-border/50 bg-card/80 backdrop-blur-md">
-        <div className="flex items-center justify-between p-4">
-          <div className="flex items-center gap-3">
-            <MapPin className="h-6 w-6 text-primary" />
-            <h1 className="text-lg font-bold">GeoAttend</h1>
-          </div>
+      <header className="sticky top-0 z-10 border-b border-border/30 bg-card/60 backdrop-blur-xl">
+        <div className="flex items-center justify-between p-4 max-w-lg mx-auto">
+          <h1 className="text-lg font-bold tracking-tight">GeoAttend</h1>
           <Sheet>
             <SheetTrigger asChild>
-              <Button variant="ghost" size="icon"><Menu className="h-5 w-5" /></Button>
+              <Button variant="ghost" size="icon" className="rounded-xl"><Menu className="h-5 w-5" /></Button>
             </SheetTrigger>
             <SheetContent side="right" className="w-72">
               <SheetHeader>
                 <SheetTitle>Menu</SheetTitle>
               </SheetHeader>
               <div className="mt-6 space-y-2">
-                <div className="rounded-lg bg-secondary/50 p-3 mb-4">
-                  <p className="font-medium">{user?.name}</p>
-                  <p className="text-xs text-muted-foreground">{user?.email}</p>
-                  <Badge variant="outline" className="mt-2 capitalize">{user?.role}</Badge>
+                <div className="rounded-xl bg-secondary/50 p-4 mb-4">
+                  <p className="font-semibold">{user?.name}</p>
+                  <p className="text-xs text-muted-foreground mt-0.5">{user?.email}</p>
+                  <Badge variant="outline" className="mt-2 capitalize text-xs">{user?.role}</Badge>
                 </div>
-                {user?.role === 'admin' && (
-                  <Button variant="ghost" className="w-full justify-start" onClick={() => navigate('/admin')}>
-                    Admin Dashboard
+                {isAdmin && (
+                  <Button variant="ghost" className="w-full justify-start rounded-xl" onClick={() => navigate('/admin')}>
+                    <Shield className="mr-2 h-4 w-4" /> Admin Panel
                   </Button>
                 )}
-                <Button variant="ghost" className="w-full justify-start text-destructive" onClick={() => { logout(); navigate('/login'); }}>
+                <Button variant="ghost" className="w-full justify-start text-destructive rounded-xl" onClick={() => { logout(); navigate('/login'); }}>
                   <LogOut className="mr-2 h-4 w-4" /> Sign Out
                 </Button>
               </div>
@@ -167,91 +161,112 @@ const Dashboard = () => {
         </div>
       </header>
 
-      <main className="p-4 max-w-lg mx-auto space-y-6 pb-8">
-        {/* Status Card */}
-        <Card className="border-border/50 overflow-hidden">
-          <div className={`h-1 ${activeCheckIn ? 'bg-primary' : 'bg-muted-foreground/30'}`} />
-          <CardContent className="p-6 text-center space-y-4">
-            <div className="relative mx-auto w-24 h-24 flex items-center justify-center">
-              {activeCheckIn && (
-                <div className="absolute inset-0 rounded-full border-2 border-primary animate-pulse-ring" />
-              )}
-              <div className={`rounded-full p-4 ${activeCheckIn ? 'bg-primary/20 border-2 border-primary' : 'bg-secondary border-2 border-border'}`}>
-                <Navigation className={`h-8 w-8 ${activeCheckIn ? 'text-primary' : 'text-muted-foreground'}`} />
+      <main className="p-4 max-w-lg mx-auto space-y-5 pb-8">
+        {/* Status Card — hidden for admins */}
+        {!isAdmin && (
+          <Card className="border-border/30 overflow-hidden shadow-xl shadow-primary/5">
+            <div className={`h-1 ${activeCheckIn ? 'bg-primary' : 'bg-muted-foreground/20'}`} />
+            <CardContent className="p-8 text-center space-y-5">
+              <div className="relative mx-auto w-24 h-24 flex items-center justify-center">
+                {activeCheckIn && (
+                  <div className="absolute inset-0 rounded-full border-2 border-primary animate-pulse-ring" />
+                )}
+                <div className={`rounded-full p-5 transition-all ${activeCheckIn ? 'bg-primary/15 border-2 border-primary shadow-lg shadow-primary/20' : 'bg-secondary border-2 border-border/50'}`}>
+                  <Navigation className={`h-8 w-8 ${activeCheckIn ? 'text-primary' : 'text-muted-foreground'}`} />
+                </div>
               </div>
-            </div>
-            <div>
-              <p className="text-sm text-muted-foreground">Current Status</p>
-              <p className="text-xl font-bold">
-                {activeCheckIn ? 'Checked In' : 'Not Checked In'}
-              </p>
-              {activeCheckIn && (
-                <p className="text-xs text-muted-foreground mt-1">
-                  Since {new Date(activeCheckIn.checkInTime).toLocaleTimeString()} at {activeCheckIn.geofenceName}
+              <div>
+                <p className="text-xs text-muted-foreground uppercase tracking-wider">Current Status</p>
+                <p className="text-xl font-bold mt-1">
+                  {activeCheckIn ? 'Checked In' : 'Not Checked In'}
                 </p>
+                {activeCheckIn && (
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Since {new Date(activeCheckIn.checkInTime).toLocaleTimeString()} at {activeCheckIn.geofenceName}
+                  </p>
+                )}
+              </div>
+              {activeCheckIn ? (
+                <Button onClick={handleCheckOut} disabled={isLoading} variant="destructive" className="w-full h-12 font-semibold rounded-xl shadow-lg" size="lg">
+                  <LogOut className="mr-2 h-5 w-5" /> {isLoading ? 'Processing...' : 'Check Out'}
+                </Button>
+              ) : (
+                <Button onClick={handleCheckIn} disabled={isLoading} className="w-full h-12 font-semibold rounded-xl shadow-lg shadow-primary/20" size="lg">
+                  <LogIn className="mr-2 h-5 w-5" /> {isLoading ? 'Locating...' : 'Check In'}
+                </Button>
               )}
-            </div>
-            {activeCheckIn ? (
-              <Button onClick={handleCheckOut} disabled={isLoading} variant="destructive" className="w-full" size="lg">
-                <LogOut className="mr-2 h-5 w-5" /> {isLoading ? 'Processing...' : 'Check Out'}
+            </CardContent>
+          </Card>
+        )}
+
+        {isAdmin && (
+          <Card className="border-primary/20 bg-primary/5">
+            <CardContent className="p-6 text-center space-y-3">
+              <Shield className="h-10 w-10 text-primary mx-auto" />
+              <p className="text-sm text-muted-foreground">You're logged in as admin. Check-in is not available for administrators.</p>
+              <Button onClick={() => navigate('/admin')} className="rounded-xl shadow-lg shadow-primary/20">
+                <Shield className="mr-2 h-4 w-4" /> Go to Admin Panel
               </Button>
-            ) : (
-              <Button onClick={handleCheckIn} disabled={isLoading} className="w-full" size="lg">
-                <LogIn className="mr-2 h-5 w-5" /> {isLoading ? 'Locating...' : 'Check In'}
-              </Button>
-            )}
-          </CardContent>
-        </Card>
+            </CardContent>
+          </Card>
+        )}
 
         {/* Stats */}
         <div className="grid grid-cols-3 gap-3">
-          <Card className="border-border/50">
+          <Card className="border-border/30">
             <CardContent className="p-4 text-center">
               <p className="text-2xl font-bold text-primary">{todayCount}</p>
-              <p className="text-xs text-muted-foreground">Today</p>
+              <p className="text-[10px] text-muted-foreground uppercase tracking-wider mt-1">Today</p>
             </CardContent>
           </Card>
-          <Card className="border-border/50">
+          <Card className="border-border/30">
             <CardContent className="p-4 text-center">
               <p className="text-2xl font-bold">{records.filter(r => r.status === 'valid').length}</p>
-              <p className="text-xs text-muted-foreground">Total Valid</p>
+              <p className="text-[10px] text-muted-foreground uppercase tracking-wider mt-1">Valid</p>
             </CardContent>
           </Card>
-          <Card className="border-border/50">
+          <Card className="border-border/30">
             <CardContent className="p-4 text-center">
               <p className="text-2xl font-bold text-destructive">{records.filter(r => r.status === 'rejected').length}</p>
-              <p className="text-xs text-muted-foreground">Rejected</p>
+              <p className="text-[10px] text-muted-foreground uppercase tracking-wider mt-1">Rejected</p>
             </CardContent>
           </Card>
         </div>
 
         {/* Recent Records */}
         <div>
-          <h2 className="text-sm font-semibold text-muted-foreground mb-3">RECENT ACTIVITY</h2>
+          <h2 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3">Recent Activity</h2>
           <div className="space-y-2">
             {records.slice(0, 10).map(r => (
-              <Card key={r.id} className="border-border/50">
-                <CardContent className="p-3 flex items-center gap-3">
+              <Card key={r.id} className="border-border/30">
+                <CardContent className="p-3.5 flex items-center gap-3">
                   {r.status === 'valid' ? (
-                    <CheckCircle2 className="h-5 w-5 text-primary shrink-0" />
+                    <div className="h-8 w-8 rounded-lg bg-success/10 flex items-center justify-center shrink-0">
+                      <CheckCircle2 className="h-4 w-4 text-success" />
+                    </div>
                   ) : (
-                    <XCircle className="h-5 w-5 text-destructive shrink-0" />
+                    <div className="h-8 w-8 rounded-lg bg-destructive/10 flex items-center justify-center shrink-0">
+                      <XCircle className="h-4 w-4 text-destructive" />
+                    </div>
                   )}
                   <div className="flex-1 min-w-0">
                     <p className="text-sm font-medium truncate">{r.geofenceName}</p>
                     <p className="text-xs text-muted-foreground">
-                      {new Date(r.checkInTime).toLocaleDateString()} • {new Date(r.checkInTime).toLocaleTimeString()}
+                      {new Date(r.checkInTime).toLocaleDateString()} · {new Date(r.checkInTime).toLocaleTimeString()}
                       {r.checkOutTime && ` — ${new Date(r.checkOutTime).toLocaleTimeString()}`}
                     </p>
                   </div>
-                  <Badge variant={r.status === 'valid' ? 'default' : 'destructive'} className="text-xs shrink-0">
+                  <Badge variant={r.status === 'valid' ? 'default' : 'destructive'} className="text-xs shrink-0 rounded-lg">
                     {r.distanceFromCenter}m
                   </Badge>
                 </CardContent>
               </Card>
             ))}
             {records.length === 0 && (
-              <p className="text-center text-sm text-muted-foreground py-8">No attendance records yet.</p>
+              <div className="text-center py-12">
+                <Clock className="h-10 w-10 text-muted-foreground/30 mx-auto mb-3" />
+                <p className="text-sm text-muted-foreground">No attendance records yet.</p>
+              </div>
             )}
           </div>
         </div>

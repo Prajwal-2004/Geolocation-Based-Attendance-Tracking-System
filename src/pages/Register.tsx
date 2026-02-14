@@ -3,9 +3,9 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
+import { Card, CardContent } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { MapPin } from 'lucide-react';
+import { Fingerprint } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { UserRole } from '@/types';
 
@@ -35,58 +35,67 @@ const Register = () => {
   };
 
   return (
-    <div className="flex min-h-screen items-center justify-center p-4">
-      <Card className="w-full max-w-md border-border/50 bg-card/80 backdrop-blur-sm">
-        <CardHeader className="text-center space-y-4">
-          <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-2xl bg-primary/10 border border-primary/20">
-            <MapPin className="h-8 w-8 text-primary" />
+    <div className="flex min-h-screen items-center justify-center p-4 relative overflow-hidden">
+      <div className="absolute top-0 right-0 w-96 h-96 bg-primary/5 rounded-full blur-3xl translate-x-1/2 -translate-y-1/2" />
+      <div className="absolute bottom-0 left-0 w-96 h-96 bg-primary/5 rounded-full blur-3xl -translate-x-1/2 translate-y-1/2" />
+
+      <Card className="w-full max-w-md border-border/30 bg-card/60 backdrop-blur-xl shadow-2xl relative z-10">
+        <CardContent className="p-8">
+          <div className="text-center space-y-4 mb-8">
+            <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-2xl bg-primary/10 border border-primary/20 shadow-lg shadow-primary/10">
+              <Fingerprint className="h-8 w-8 text-primary" />
+            </div>
+            <div>
+              <h1 className="text-3xl font-bold tracking-tight">Create Account</h1>
+              <p className="text-sm text-muted-foreground mt-1">Join GeoAttend to manage attendance</p>
+            </div>
           </div>
-          <div>
-            <CardTitle className="text-2xl font-bold">Create Account</CardTitle>
-            <CardDescription>Join GeoAttend to manage attendance</CardDescription>
-          </div>
-        </CardHeader>
-        <CardContent>
+
           <form onSubmit={handleSubmit} className="space-y-4">
-            <div className="space-y-2">
-              <label className="text-sm font-medium text-muted-foreground">Full Name</label>
-              <Input value={name} onChange={e => setName(e.target.value)} required className="bg-secondary/50" placeholder="John Doe" />
+            <div className="space-y-1.5">
+              <label className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Full Name</label>
+              <Input value={name} onChange={e => setName(e.target.value)} required className="bg-secondary/40 border-border/50 h-11" placeholder="John Doe" />
             </div>
-            <div className="space-y-2">
-              <label className="text-sm font-medium text-muted-foreground">Email</label>
-              <Input type="email" value={email} onChange={e => setEmail(e.target.value)} required className="bg-secondary/50" placeholder="you@example.com" />
+            <div className="space-y-1.5">
+              <label className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Email</label>
+              <Input type="email" value={email} onChange={e => setEmail(e.target.value)} required className="bg-secondary/40 border-border/50 h-11" placeholder="you@university.edu" />
             </div>
-            <div className="space-y-2">
-              <label className="text-sm font-medium text-muted-foreground">Password</label>
-              <Input type="password" value={password} onChange={e => setPassword(e.target.value)} required className="bg-secondary/50" placeholder="Min 6 characters" minLength={6} />
+            <div className="space-y-1.5">
+              <label className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Password</label>
+              <Input type="password" value={password} onChange={e => setPassword(e.target.value)} required className="bg-secondary/40 border-border/50 h-11" placeholder="Min 6 characters" minLength={6} />
             </div>
-            <div className="space-y-2">
-              <label className="text-sm font-medium text-muted-foreground">Role</label>
-              <Select value={role} onValueChange={v => setRole(v as UserRole)}>
-                <SelectTrigger className="bg-secondary/50">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="student">Student</SelectItem>
-                  <SelectItem value="faculty">Faculty</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-2">
-              <label className="text-sm font-medium text-muted-foreground">Department</label>
-              <Input value={department} onChange={e => setDepartment(e.target.value)} className="bg-secondary/50" placeholder="Computer Science" />
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <label className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Role</label>
+                <Select value={role} onValueChange={v => setRole(v as UserRole)}>
+                  <SelectTrigger className="bg-secondary/40 border-border/50 h-11">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="student">Student</SelectItem>
+                    <SelectItem value="faculty">Faculty</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-1.5">
+                <label className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Department</label>
+                <Input value={department} onChange={e => setDepartment(e.target.value)} className="bg-secondary/40 border-border/50 h-11" placeholder="CS" />
+              </div>
             </div>
             {role === 'student' && (
-              <div className="space-y-2">
-                <label className="text-sm font-medium text-muted-foreground">Student ID</label>
-                <Input value={studentId} onChange={e => setStudentId(e.target.value)} className="bg-secondary/50" placeholder="STU-001" />
+              <div className="space-y-1.5">
+                <label className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Student ID</label>
+                <Input value={studentId} onChange={e => setStudentId(e.target.value)} className="bg-secondary/40 border-border/50 h-11" placeholder="STU-001" />
               </div>
             )}
-            <Button type="submit" className="w-full font-semibold">Create Account</Button>
+            <Button type="submit" className="w-full h-11 font-semibold text-sm tracking-wide shadow-lg shadow-primary/20">
+              Create Account
+            </Button>
           </form>
-          <div className="mt-4 text-center">
-            <button onClick={() => navigate('/login')} className="text-sm text-primary hover:underline">
-              Already have an account? Sign In
+
+          <div className="mt-6 text-center">
+            <button onClick={() => navigate('/login')} className="text-sm text-muted-foreground hover:text-primary transition-colors">
+              Already have an account? <span className="text-primary font-medium">Sign In</span>
             </button>
           </div>
         </CardContent>
