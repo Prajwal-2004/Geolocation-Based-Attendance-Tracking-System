@@ -7,20 +7,19 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Fingerprint } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
-import { UserRole } from '@/types';
 
 const Register = () => {
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [role, setRole] = useState<UserRole>('student');
+  const [role, setRole] = useState('student');
   const [department, setDepartment] = useState('');
   const [studentId, setStudentId] = useState('');
   const { register } = useAuth();
   const navigate = useNavigate();
   const { toast } = useToast();
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = (e) => {
     e.preventDefault();
     try {
       const user = register(
@@ -29,7 +28,7 @@ const Register = () => {
       );
       toast({ title: 'Account created!', description: `Welcome, ${user.name}` });
       navigate(user.role === 'admin' ? '/admin' : '/dashboard');
-    } catch (err: any) {
+    } catch (err) {
       toast({ title: 'Registration failed', description: err.message, variant: 'destructive' });
     }
   };
@@ -54,23 +53,21 @@ const Register = () => {
           <form onSubmit={handleSubmit} className="space-y-4">
             <div className="space-y-1.5">
               <label className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Full Name</label>
-              <Input value={name} onChange={e => setName(e.target.value)} required className="bg-secondary/40 border-border/50 h-11" placeholder="John Doe" />
+              <Input value={name} onChange={(e) => setName(e.target.value)} required className="bg-secondary/40 border-border/50 h-11" placeholder="John Doe" />
             </div>
             <div className="space-y-1.5">
               <label className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Email</label>
-              <Input type="email" value={email} onChange={e => setEmail(e.target.value)} required className="bg-secondary/40 border-border/50 h-11" placeholder="you@university.edu" />
+              <Input type="email" value={email} onChange={(e) => setEmail(e.target.value)} required className="bg-secondary/40 border-border/50 h-11" placeholder="you@university.edu" />
             </div>
             <div className="space-y-1.5">
               <label className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Password</label>
-              <Input type="password" value={password} onChange={e => setPassword(e.target.value)} required className="bg-secondary/40 border-border/50 h-11" placeholder="Min 6 characters" minLength={6} />
+              <Input type="password" value={password} onChange={(e) => setPassword(e.target.value)} required className="bg-secondary/40 border-border/50 h-11" placeholder="Min 6 characters" minLength={6} />
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5">
                 <label className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Role</label>
-                <Select value={role} onValueChange={v => setRole(v as UserRole)}>
-                  <SelectTrigger className="bg-secondary/40 border-border/50 h-11">
-                    <SelectValue />
-                  </SelectTrigger>
+                <Select value={role} onValueChange={(v) => setRole(v)}>
+                  <SelectTrigger className="bg-secondary/40 border-border/50 h-11"><SelectValue /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="student">Student</SelectItem>
                     <SelectItem value="faculty">Faculty</SelectItem>
@@ -79,18 +76,16 @@ const Register = () => {
               </div>
               <div className="space-y-1.5">
                 <label className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Department</label>
-                <Input value={department} onChange={e => setDepartment(e.target.value)} className="bg-secondary/40 border-border/50 h-11" placeholder="CS" />
+                <Input value={department} onChange={(e) => setDepartment(e.target.value)} className="bg-secondary/40 border-border/50 h-11" placeholder="CS" />
               </div>
             </div>
             {role === 'student' && (
               <div className="space-y-1.5">
                 <label className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Student ID</label>
-                <Input value={studentId} onChange={e => setStudentId(e.target.value)} className="bg-secondary/40 border-border/50 h-11" placeholder="STU-001" />
+                <Input value={studentId} onChange={(e) => setStudentId(e.target.value)} className="bg-secondary/40 border-border/50 h-11" placeholder="STU-001" />
               </div>
             )}
-            <Button type="submit" className="w-full h-11 font-semibold text-sm tracking-wide shadow-lg shadow-primary/20">
-              Create Account
-            </Button>
+            <Button type="submit" className="w-full h-11 font-semibold text-sm tracking-wide shadow-lg shadow-primary/20">Create Account</Button>
           </form>
 
           <div className="mt-6 text-center">
