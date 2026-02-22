@@ -5,10 +5,8 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { LogIn, LogOut, Clock, CheckCircle2, XCircle, Navigation, Menu, Shield, MapPin, Crosshair } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
-import { getCurrentLocation } from '@/lib/geofence';
-import { validateLocation, validateTimestamp, checkGpsAccuracy } from '@/lib/geofence';
+import { getCurrentLocation, validateLocation, validateTimestamp, checkGpsAccuracy } from '@/lib/geofence';
 import { getGeofences, getAttendanceRecords, addAttendanceRecord, updateAttendanceRecord, addAnomaly } from '@/lib/storage';
-import { AttendanceRecord, LocationData } from '@/types';
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from '@/components/ui/sheet';
 import { useNavigate } from 'react-router-dom';
 
@@ -18,13 +16,13 @@ const Dashboard = () => {
   const navigate = useNavigate();
   const [isLoading, setIsLoading] = useState(false);
   const [isCapturing, setIsCapturing] = useState(false);
-  const [capturedLocation, setCapturedLocation] = useState<LocationData | null>(null);
-  const [records, setRecords] = useState<AttendanceRecord[]>(() =>
-    getAttendanceRecords().filter(r => r.userId === user?.id).reverse()
+  const [capturedLocation, setCapturedLocation] = useState(null);
+  const [records, setRecords] = useState(() =>
+    getAttendanceRecords().filter((r) => r.userId === user?.id).reverse()
   );
 
   const isAdmin = user?.role === 'admin';
-  const activeCheckIn = records.find(r => r.status === 'valid' && !r.checkOutTime);
+  const activeCheckIn = records.find((r) => r.status === 'valid' && !r.checkOutTime);
 
   const handleCaptureLocation = async () => {
     setIsCapturing(true);
@@ -33,7 +31,7 @@ const Dashboard = () => {
       const location = await getCurrentLocation();
       setCapturedLocation(location);
       toast({ title: 'Location captured', description: 'Your GPS coordinates have been acquired.' });
-    } catch (err: any) {
+    } catch (err) {
       toast({ title: 'Error', description: err.message, variant: 'destructive' });
     }
     setIsCapturing(false);
@@ -59,14 +57,14 @@ const Dashboard = () => {
         return;
       }
 
-      const geofences = getGeofences().filter(g => g.isActive);
+      const geofences = getGeofences().filter((g) => g.isActive);
       if (geofences.length === 0) {
         toast({ title: 'No geofences', description: 'No active geofences configured. Contact admin.', variant: 'destructive' });
         setIsLoading(false);
         return;
       }
 
-      const todayRecords = getAttendanceRecords().filter(r =>
+      const todayRecords = getAttendanceRecords().filter((r) =>
         r.userId === user.id &&
         r.status === 'valid' &&
         new Date(r.checkInTime).toDateString() === new Date().toDateString() &&
@@ -92,7 +90,7 @@ const Dashboard = () => {
           setRecords([record, ...records]);
           matched = true;
           setCapturedLocation(null);
-          toast({ title: 'Checked in!', description: `${geofence.name} — ${result.distance}m from center` });
+          toast({ title: 'Checked in!', description: `${geofence.name} — ${result.distance}m from center (within ${geofence.radiusMeters}m radius)` });
           break;
         }
       }
@@ -100,9 +98,7 @@ const Dashboard = () => {
       if (!matched) {
         const nearest = geofences[0];
         const result = validateLocation(location, nearest);
-        const reason = nearest.corners && nearest.corners.length >= 3
-          ? `Outside classroom boundary (${result.distance}m from center)`
-          : `Outside geofence boundary (${result.distance}m from center, max ${nearest.radiusMeters}m)`;
+        const reason = `Outside geofence boundary (${result.distance}m from center, max ${nearest.radiusMeters}m)`;
         addAttendanceRecord({
           userId: user.id, userName: user.name, userRole: user.role,
           geofenceId: nearest.id, geofenceName: nearest.name,
@@ -111,11 +107,11 @@ const Dashboard = () => {
           distanceFromCenter: result.distance, status: 'rejected',
           rejectionReason: reason,
         });
-        addAnomaly({ userId: user.id, userName: user.name, type: 'out_of_range', description: `User is ${result.distance}m from ${nearest.name}`, timestamp: new Date().toISOString(), locationData: location });
+        addAnomaly({ userId: user.id, userName: user.name, type: 'out_of_range', description: `User is ${result.distance}m from ${nearest.name} (max ${nearest.radiusMeters}m)`, timestamp: new Date().toISOString(), locationData: location });
         setCapturedLocation(null);
-        toast({ title: 'Check-in rejected', description: `You are outside the ${nearest.name} boundary.`, variant: 'destructive' });
+        toast({ title: 'Check-in rejected', description: `You are outside the ${nearest.name} boundary (${result.distance}m away, allowed: ${nearest.radiusMeters}m).`, variant: 'destructive' });
       }
-    } catch (err: any) {
+    } catch (err) {
       toast({ title: 'Error', description: err.message, variant: 'destructive' });
     }
     setIsLoading(false);
@@ -127,21 +123,20 @@ const Dashboard = () => {
     try {
       await getCurrentLocation();
       updateAttendanceRecord(activeCheckIn.id, { checkOutTime: new Date().toISOString() });
-      setRecords(prev => prev.map(r => r.id === activeCheckIn.id ? { ...r, checkOutTime: new Date().toISOString() } : r));
+      setRecords((prev) => prev.map((r) => r.id === activeCheckIn.id ? { ...r, checkOutTime: new Date().toISOString() } : r));
       toast({ title: 'Checked out!', description: 'Your attendance has been recorded.' });
     } catch {
       updateAttendanceRecord(activeCheckIn.id, { checkOutTime: new Date().toISOString() });
-      setRecords(prev => prev.map(r => r.id === activeCheckIn.id ? { ...r, checkOutTime: new Date().toISOString() } : r));
+      setRecords((prev) => prev.map((r) => r.id === activeCheckIn.id ? { ...r, checkOutTime: new Date().toISOString() } : r));
       toast({ title: 'Checked out', description: 'Location unavailable, but check-out recorded.' });
     }
     setIsLoading(false);
   };
 
-  const todayCount = records.filter(r => r.status === 'valid' && new Date(r.checkInTime).toDateString() === new Date().toDateString()).length;
+  const todayCount = records.filter((r) => r.status === 'valid' && new Date(r.checkInTime).toDateString() === new Date().toDateString()).length;
 
   return (
     <div className="min-h-screen bg-background">
-      {/* Header */}
       <header className="sticky top-0 z-10 border-b border-border/30 bg-card/60 backdrop-blur-xl">
         <div className="flex items-center justify-between p-4 max-w-lg mx-auto">
           <h1 className="text-lg font-bold tracking-tight">GeoAttend</h1>
@@ -150,9 +145,7 @@ const Dashboard = () => {
               <Button variant="ghost" size="icon" className="rounded-xl"><Menu className="h-5 w-5" /></Button>
             </SheetTrigger>
             <SheetContent side="right" className="w-72">
-              <SheetHeader>
-                <SheetTitle>Menu</SheetTitle>
-              </SheetHeader>
+              <SheetHeader><SheetTitle>Menu</SheetTitle></SheetHeader>
               <div className="mt-6 space-y-2">
                 <div className="rounded-xl bg-secondary/50 p-4 mb-4">
                   <p className="font-semibold">{user?.name}</p>
@@ -174,36 +167,22 @@ const Dashboard = () => {
       </header>
 
       <main className="p-4 max-w-lg mx-auto space-y-5 pb-8">
-        {/* Status Card — hidden for admins */}
         {!isAdmin && (
           <Card className="border-border/30 overflow-hidden shadow-xl shadow-primary/5">
             <div className={`h-1 ${activeCheckIn ? 'bg-primary' : capturedLocation ? 'bg-accent' : 'bg-muted-foreground/20'}`} />
             <CardContent className="p-8 text-center space-y-5">
               <div className="relative mx-auto w-24 h-24 flex items-center justify-center">
-                {activeCheckIn && (
-                  <div className="absolute inset-0 rounded-full border-2 border-primary animate-pulse-ring" />
-                )}
+                {activeCheckIn && <div className="absolute inset-0 rounded-full border-2 border-primary animate-pulse-ring" />}
                 <div className={`rounded-full p-5 transition-all ${activeCheckIn ? 'bg-primary/15 border-2 border-primary shadow-lg shadow-primary/20' : capturedLocation ? 'bg-accent/15 border-2 border-accent' : 'bg-secondary border-2 border-border/50'}`}>
-                  {capturedLocation && !activeCheckIn ? (
-                    <MapPin className="h-8 w-8 text-accent" />
-                  ) : (
-                    <Navigation className={`h-8 w-8 ${activeCheckIn ? 'text-primary' : 'text-muted-foreground'}`} />
-                  )}
+                  {capturedLocation && !activeCheckIn ? <MapPin className="h-8 w-8 text-accent" /> : <Navigation className={`h-8 w-8 ${activeCheckIn ? 'text-primary' : 'text-muted-foreground'}`} />}
                 </div>
               </div>
               <div>
                 <p className="text-xs text-muted-foreground uppercase tracking-wider">Current Status</p>
-                <p className="text-xl font-bold mt-1">
-                  {activeCheckIn ? 'Checked In' : capturedLocation ? 'Location Captured' : 'Not Checked In'}
-                </p>
-                {activeCheckIn && (
-                  <p className="text-xs text-muted-foreground mt-1">
-                    Since {new Date(activeCheckIn.checkInTime).toLocaleTimeString()} at {activeCheckIn.geofenceName}
-                  </p>
-                )}
+                <p className="text-xl font-bold mt-1">{activeCheckIn ? 'Checked In' : capturedLocation ? 'Location Captured' : 'Not Checked In'}</p>
+                {activeCheckIn && <p className="text-xs text-muted-foreground mt-1">Since {new Date(activeCheckIn.checkInTime).toLocaleTimeString()} at {activeCheckIn.geofenceName}</p>}
               </div>
 
-              {/* Captured Location Details */}
               {capturedLocation && !activeCheckIn && (
                 <div className="rounded-xl bg-secondary/50 p-4 text-left space-y-2 border border-border/30">
                   <div className="flex items-center gap-2 mb-2">
@@ -211,27 +190,14 @@ const Dashboard = () => {
                     <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Your Location</p>
                   </div>
                   <div className="grid grid-cols-2 gap-2 text-sm">
-                    <div>
-                      <p className="text-[10px] text-muted-foreground uppercase">Latitude</p>
-                      <p className="font-mono font-medium">{capturedLocation.latitude.toFixed(6)}</p>
-                    </div>
-                    <div>
-                      <p className="text-[10px] text-muted-foreground uppercase">Longitude</p>
-                      <p className="font-mono font-medium">{capturedLocation.longitude.toFixed(6)}</p>
-                    </div>
-                    <div>
-                      <p className="text-[10px] text-muted-foreground uppercase">Accuracy</p>
-                      <p className="font-mono font-medium">{capturedLocation.accuracy.toFixed(1)}m</p>
-                    </div>
-                    <div>
-                      <p className="text-[10px] text-muted-foreground uppercase">Time</p>
-                      <p className="font-mono font-medium">{new Date(capturedLocation.timestamp).toLocaleTimeString()}</p>
-                    </div>
+                    <div><p className="text-[10px] text-muted-foreground uppercase">Latitude</p><p className="font-mono font-medium">{capturedLocation.latitude.toFixed(6)}</p></div>
+                    <div><p className="text-[10px] text-muted-foreground uppercase">Longitude</p><p className="font-mono font-medium">{capturedLocation.longitude.toFixed(6)}</p></div>
+                    <div><p className="text-[10px] text-muted-foreground uppercase">Accuracy</p><p className="font-mono font-medium">{capturedLocation.accuracy.toFixed(1)}m</p></div>
+                    <div><p className="text-[10px] text-muted-foreground uppercase">Time</p><p className="font-mono font-medium">{new Date(capturedLocation.timestamp).toLocaleTimeString()}</p></div>
                   </div>
                 </div>
               )}
 
-              {/* Action Buttons */}
               {activeCheckIn ? (
                 <Button onClick={handleCheckOut} disabled={isLoading} variant="destructive" className="w-full h-12 font-semibold rounded-xl shadow-lg" size="lg">
                   <LogOut className="mr-2 h-5 w-5" /> {isLoading ? 'Processing...' : 'Check Out'}
@@ -266,43 +232,22 @@ const Dashboard = () => {
           </Card>
         )}
 
-        {/* Stats */}
         <div className="grid grid-cols-3 gap-3">
-          <Card className="border-border/30">
-            <CardContent className="p-4 text-center">
-              <p className="text-2xl font-bold text-primary">{todayCount}</p>
-              <p className="text-[10px] text-muted-foreground uppercase tracking-wider mt-1">Today</p>
-            </CardContent>
-          </Card>
-          <Card className="border-border/30">
-            <CardContent className="p-4 text-center">
-              <p className="text-2xl font-bold">{records.filter(r => r.status === 'valid').length}</p>
-              <p className="text-[10px] text-muted-foreground uppercase tracking-wider mt-1">Valid</p>
-            </CardContent>
-          </Card>
-          <Card className="border-border/30">
-            <CardContent className="p-4 text-center">
-              <p className="text-2xl font-bold text-destructive">{records.filter(r => r.status === 'rejected').length}</p>
-              <p className="text-[10px] text-muted-foreground uppercase tracking-wider mt-1">Rejected</p>
-            </CardContent>
-          </Card>
+          <Card className="border-border/30"><CardContent className="p-4 text-center"><p className="text-2xl font-bold text-primary">{todayCount}</p><p className="text-[10px] text-muted-foreground uppercase tracking-wider mt-1">Today</p></CardContent></Card>
+          <Card className="border-border/30"><CardContent className="p-4 text-center"><p className="text-2xl font-bold">{records.filter((r) => r.status === 'valid').length}</p><p className="text-[10px] text-muted-foreground uppercase tracking-wider mt-1">Valid</p></CardContent></Card>
+          <Card className="border-border/30"><CardContent className="p-4 text-center"><p className="text-2xl font-bold text-destructive">{records.filter((r) => r.status === 'rejected').length}</p><p className="text-[10px] text-muted-foreground uppercase tracking-wider mt-1">Rejected</p></CardContent></Card>
         </div>
 
-        {/* Recent Records */}
         <div>
           <h2 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3">Recent Activity</h2>
           <div className="space-y-2">
-            {records.slice(0, 10).map(r => (
+            {records.slice(0, 10).map((r) => (
               <Card key={r.id} className="border-border/30">
                 <CardContent className="p-3.5 flex items-center gap-3">
                   {r.status === 'valid' ? (
-                    <div className="h-8 w-8 rounded-lg bg-success/10 flex items-center justify-center shrink-0">
-                      <CheckCircle2 className="h-4 w-4 text-success" />
-                    </div>
+                    <div className="h-8 w-8 rounded-lg bg-success/10 flex items-center justify-center shrink-0"><CheckCircle2 className="h-4 w-4 text-success" /></div>
                   ) : (
-                    <div className="h-8 w-8 rounded-lg bg-destructive/10 flex items-center justify-center shrink-0">
-                      <XCircle className="h-4 w-4 text-destructive" />
-                    </div>
+                    <div className="h-8 w-8 rounded-lg bg-destructive/10 flex items-center justify-center shrink-0"><XCircle className="h-4 w-4 text-destructive" /></div>
                   )}
                   <div className="flex-1 min-w-0">
                     <p className="text-sm font-medium truncate">{r.geofenceName}</p>
@@ -311,9 +256,7 @@ const Dashboard = () => {
                       {r.checkOutTime && ` — ${new Date(r.checkOutTime).toLocaleTimeString()}`}
                     </p>
                   </div>
-                  <Badge variant={r.status === 'valid' ? 'default' : 'destructive'} className="text-xs shrink-0 rounded-lg">
-                    {r.distanceFromCenter}m
-                  </Badge>
+                  <Badge variant={r.status === 'valid' ? 'default' : 'destructive'} className="text-xs shrink-0 rounded-lg">{r.distanceFromCenter}m</Badge>
                 </CardContent>
               </Card>
             ))}

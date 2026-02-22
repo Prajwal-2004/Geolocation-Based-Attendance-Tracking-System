@@ -11,115 +11,95 @@ import { useToast } from '@/hooks/use-toast';
 import { useNavigate } from 'react-router-dom';
 import { getGeofences, addGeofence, deleteGeofence, updateGeofence, getAttendanceRecords, getAnomalies, getUsers } from '@/lib/storage';
 import { getCurrentLocation } from '@/lib/geofence';
-import { Geofence, AttendanceRecord, AnomalyLog, User as AppUser } from '@/types';
 
 const AdminDashboard = () => {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
   const { toast } = useToast();
 
-  const [geofences, setGeofences] = useState<Geofence[]>(getGeofences);
-  const [records] = useState<AttendanceRecord[]>(() => getAttendanceRecords().reverse());
-  const [anomalies] = useState<AnomalyLog[]>(() => getAnomalies().reverse());
-  const [users] = useState<AppUser[]>(getUsers);
+  const [geofences, setGeofences] = useState(getGeofences);
+  const [records] = useState(() => getAttendanceRecords().reverse());
+  const [anomalies] = useState(() => getAnomalies().reverse());
+  const [users] = useState(getUsers);
 
-  // Geofence form — 4 corners with GPS capture
+  // Geofence form — center point + radius
   const [gName, setGName] = useState('');
-  const [corners, setCorners] = useState<Array<{ lat: string; lon: string }>>([
-    { lat: '', lon: '' },
-    { lat: '', lon: '' },
-    { lat: '', lon: '' },
-    { lat: '', lon: '' },
-  ]);
-  const [capturingCorner, setCapturingCorner] = useState<number | null>(null);
+  const [centerLat, setCenterLat] = useState('');
+  const [centerLon, setCenterLon] = useState('');
+  const [radius, setRadius] = useState('50');
+  const [isCapturingCenter, setIsCapturingCenter] = useState(false);
 
-  const captureCornerLocation = async (index: number) => {
-    setCapturingCorner(index);
+  const captureCenterLocation = async () => {
+    setIsCapturingCenter(true);
     try {
       const location = await getCurrentLocation();
-      const updated = [...corners];
-      updated[index] = {
-        lat: location.latitude.toFixed(6),
-        lon: location.longitude.toFixed(6),
-      };
-      setCorners(updated);
-      toast({ title: `Corner ${index + 1} captured`, description: `${location.latitude.toFixed(6)}, ${location.longitude.toFixed(6)}` });
-    } catch (err: any) {
+      setCenterLat(location.latitude.toFixed(6));
+      setCenterLon(location.longitude.toFixed(6));
+      toast({ title: 'Center captured', description: `${location.latitude.toFixed(6)}, ${location.longitude.toFixed(6)} (accuracy: ${location.accuracy.toFixed(1)}m)` });
+    } catch (err) {
       toast({ title: 'Location error', description: err.message, variant: 'destructive' });
     }
-    setCapturingCorner(null);
+    setIsCapturingCenter(false);
   };
 
-  const handleAddGeofence = (e: React.FormEvent) => {
+  const handleAddGeofence = (e) => {
     e.preventDefault();
-    const parsedCorners = corners.map(c => ({
-      latitude: parseFloat(c.lat),
-      longitude: parseFloat(c.lon),
-    }));
-    if (parsedCorners.some(c => isNaN(c.latitude) || isNaN(c.longitude))) {
-      toast({ title: 'Invalid coordinates', description: 'Please capture or enter all 4 corners.', variant: 'destructive' });
+    const lat = parseFloat(centerLat);
+    const lon = parseFloat(centerLon);
+    const rad = parseFloat(radius);
+    if (isNaN(lat) || isNaN(lon)) {
+      toast({ title: 'Invalid coordinates', description: 'Please capture or enter center coordinates.', variant: 'destructive' });
       return;
     }
-    const centerLat = parsedCorners.reduce((s, c) => s + c.latitude, 0) / 4;
-    const centerLon = parsedCorners.reduce((s, c) => s + c.longitude, 0) / 4;
+    if (isNaN(rad) || rad <= 0) {
+      toast({ title: 'Invalid radius', description: 'Please enter a valid radius in meters.', variant: 'destructive' });
+      return;
+    }
     const g = addGeofence({
       name: gName,
-      latitude: centerLat,
-      longitude: centerLon,
-      radiusMeters: 0,
-      corners: parsedCorners,
-      createdBy: user!.id,
+      latitude: lat,
+      longitude: lon,
+      radiusMeters: rad,
+      createdBy: user.id,
       isActive: true,
     });
     setGeofences([...geofences, g]);
     setGName('');
-    setCorners([{ lat: '', lon: '' }, { lat: '', lon: '' }, { lat: '', lon: '' }, { lat: '', lon: '' }]);
-    toast({ title: 'Geofence created', description: g.name });
+    setCenterLat('');
+    setCenterLon('');
+    setRadius('50');
+    toast({ title: 'Geofence created', description: `${g.name} — ${rad}m radius` });
   };
 
-  const handleDeleteGeofence = (id: string) => {
+  const handleDeleteGeofence = (id) => {
     deleteGeofence(id);
-    setGeofences(geofences.filter(g => g.id !== id));
+    setGeofences(geofences.filter((g) => g.id !== id));
     toast({ title: 'Geofence deleted' });
   };
 
-  const handleToggleGeofence = (id: string, active: boolean) => {
+  const handleToggleGeofence = (id, active) => {
     updateGeofence(id, { isActive: active });
-    setGeofences(geofences.map(g => g.id === id ? { ...g, isActive: active } : g));
+    setGeofences(geofences.map((g) => g.id === id ? { ...g, isActive: active } : g));
   };
 
-  const validCount = records.filter(r => r.status === 'valid').length;
-  const todayCount = records.filter(r => new Date(r.checkInTime).toDateString() === new Date().toDateString()).length;
+  const validCount = records.filter((r) => r.status === 'valid').length;
+  const todayCount = records.filter((r) => new Date(r.checkInTime).toDateString() === new Date().toDateString()).length;
 
-  const formatCorners = (g: Geofence) => {
-    if (g.corners && g.corners.length === 4) {
-      return g.corners.map((c, i) => `C${i + 1}(${c.latitude.toFixed(4)}, ${c.longitude.toFixed(4)})`).join(' · ');
-    }
-    return `${g.latitude.toFixed(4)}, ${g.longitude.toFixed(4)} · ${g.radiusMeters}m`;
-  };
-
-  const cornerLabels = ['Front-Left', 'Front-Right', 'Back-Right', 'Back-Left'];
+  const formatGeofence = (g) => `${g.latitude.toFixed(4)}, ${g.longitude.toFixed(4)} · ${g.radiusMeters}m radius`;
 
   return (
     <div className="min-h-screen bg-background">
       <header className="sticky top-0 z-10 border-b border-border/30 bg-card/60 backdrop-blur-xl">
         <div className="flex items-center justify-between p-4 max-w-4xl mx-auto">
           <div className="flex items-center gap-3">
-            <Button variant="ghost" size="icon" onClick={() => navigate('/dashboard')} className="rounded-xl">
-              <ArrowLeft className="h-5 w-5" />
-            </Button>
-            <h1 className="text-lg font-bold flex items-center gap-2 tracking-tight">
-              <Shield className="h-5 w-5 text-primary" /> Admin Panel
-            </h1>
+            <Button variant="ghost" size="icon" onClick={() => navigate('/dashboard')} className="rounded-xl"><ArrowLeft className="h-5 w-5" /></Button>
+            <h1 className="text-lg font-bold flex items-center gap-2 tracking-tight"><Shield className="h-5 w-5 text-primary" /> Admin Panel</h1>
           </div>
-          <Button variant="ghost" size="icon" onClick={() => { logout(); navigate('/login'); }} className="rounded-xl">
-            <LogOut className="h-5 w-5" />
-          </Button>
+          <Button variant="ghost" size="icon" onClick={() => { logout(); navigate('/login'); }} className="rounded-xl"><LogOut className="h-5 w-5" /></Button>
         </div>
       </header>
 
       <main className="p-4 max-w-4xl mx-auto pb-8">
-        {/* Stats */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
           {[
             { icon: Users, value: users.length, label: 'Users', color: 'text-primary' },
@@ -145,87 +125,43 @@ const AdminDashboard = () => {
             <TabsTrigger value="users" className="rounded-lg text-xs"><Users className="h-3.5 w-3.5 mr-1 hidden sm:inline" /> Users</TabsTrigger>
           </TabsList>
 
-          {/* Geofences Tab */}
           <TabsContent value="geofences" className="space-y-4">
             <Card className="border-border/30 shadow-lg">
               <CardHeader className="pb-3">
                 <CardTitle className="text-base tracking-tight">Add Geofence Zone</CardTitle>
-                <p className="text-xs text-muted-foreground">Stand at each corner and use "Capture" to grab your GPS position, or type coordinates manually.</p>
+                <p className="text-xs text-muted-foreground">Set a center point and radius. Use "Capture" to grab your current GPS position as center, or type coordinates manually.</p>
               </CardHeader>
               <CardContent>
                 <form onSubmit={handleAddGeofence} className="space-y-4">
-                  <Input
-                    placeholder="Zone name (e.g., Room 101)"
-                    value={gName}
-                    onChange={e => setGName(e.target.value)}
-                    required
-                    className="bg-secondary/40 border-border/50 h-11"
-                  />
+                  <Input placeholder="Zone name (e.g., Room 101)" value={gName} onChange={(e) => setGName(e.target.value)} required className="bg-secondary/40 border-border/50 h-11" />
 
-                  <div className="grid gap-3">
-                    {corners.map((corner, i) => (
-                      <div key={i} className="rounded-xl border border-border/30 bg-secondary/20 p-3 space-y-2">
-                        <div className="flex items-center justify-between">
-                          <p className="text-xs font-medium text-muted-foreground">
-                            Corner {i + 1} <span className="text-muted-foreground/60">({cornerLabels[i]})</span>
-                          </p>
-                          <Button
-                            type="button"
-                            variant="outline"
-                            size="sm"
-                            onClick={() => captureCornerLocation(i)}
-                            disabled={capturingCorner !== null}
-                            className="h-8 text-xs rounded-lg gap-1.5 border-primary/30 text-primary hover:bg-primary/10"
-                          >
-                            {capturingCorner === i ? (
-                              <Loader2 className="h-3 w-3 animate-spin" />
-                            ) : (
-                              <Crosshair className="h-3 w-3" />
-                            )}
-                            {capturingCorner === i ? 'Capturing…' : 'Capture'}
-                          </Button>
-                        </div>
-                        <div className="grid grid-cols-2 gap-2">
-                          <Input
-                            placeholder="Latitude"
-                            type="number"
-                            step="any"
-                            value={corner.lat}
-                            onChange={e => {
-                              const updated = [...corners];
-                              updated[i].lat = e.target.value;
-                              setCorners(updated);
-                            }}
-                            required
-                            className="bg-secondary/40 border-border/50 text-xs h-9"
-                          />
-                          <Input
-                            placeholder="Longitude"
-                            type="number"
-                            step="any"
-                            value={corner.lon}
-                            onChange={e => {
-                              const updated = [...corners];
-                              updated[i].lon = e.target.value;
-                              setCorners(updated);
-                            }}
-                            required
-                            className="bg-secondary/40 border-border/50 text-xs h-9"
-                          />
-                        </div>
-                      </div>
-                    ))}
+                  <div className="rounded-xl border border-border/30 bg-secondary/20 p-3 space-y-3">
+                    <div className="flex items-center justify-between">
+                      <p className="text-xs font-medium text-muted-foreground">Center Point</p>
+                      <Button type="button" variant="outline" size="sm" onClick={captureCenterLocation} disabled={isCapturingCenter} className="h-8 text-xs rounded-lg gap-1.5 border-primary/30 text-primary hover:bg-primary/10">
+                        {isCapturingCenter ? <Loader2 className="h-3 w-3 animate-spin" /> : <Crosshair className="h-3 w-3" />}
+                        {isCapturingCenter ? 'Capturing…' : 'Capture Center'}
+                      </Button>
+                    </div>
+                    <div className="grid grid-cols-2 gap-2">
+                      <Input placeholder="Latitude" type="number" step="any" value={centerLat} onChange={(e) => setCenterLat(e.target.value)} required className="bg-secondary/40 border-border/50 text-xs h-9" />
+                      <Input placeholder="Longitude" type="number" step="any" value={centerLon} onChange={(e) => setCenterLon(e.target.value)} required className="bg-secondary/40 border-border/50 text-xs h-9" />
+                    </div>
                   </div>
 
-                  <Button type="submit" className="w-full h-11 font-semibold rounded-xl shadow-lg shadow-primary/20">
-                    Create Zone
-                  </Button>
+                  <div className="rounded-xl border border-border/30 bg-secondary/20 p-3 space-y-2">
+                    <p className="text-xs font-medium text-muted-foreground">Radius (meters)</p>
+                    <Input placeholder="e.g., 50" type="number" min="1" step="1" value={radius} onChange={(e) => setRadius(e.target.value)} required className="bg-secondary/40 border-border/50 text-xs h-9" />
+                    <p className="text-[10px] text-muted-foreground">Students must be within this distance from the center to check in.</p>
+                  </div>
+
+                  <Button type="submit" className="w-full h-11 font-semibold rounded-xl shadow-lg shadow-primary/20">Create Zone</Button>
                 </form>
               </CardContent>
             </Card>
 
             <div className="space-y-2">
-              {geofences.map(g => (
+              {geofences.map((g) => (
                 <Card key={g.id} className="border-border/30">
                   <CardContent className="p-3.5 flex items-center gap-3">
                     <div className={`h-8 w-8 rounded-lg flex items-center justify-center shrink-0 ${g.isActive ? 'bg-primary/10' : 'bg-muted'}`}>
@@ -233,12 +169,10 @@ const AdminDashboard = () => {
                     </div>
                     <div className="flex-1 min-w-0">
                       <p className="text-sm font-medium">{g.name}</p>
-                      <p className="text-[10px] text-muted-foreground break-all leading-relaxed">{formatCorners(g)}</p>
+                      <p className="text-[10px] text-muted-foreground break-all leading-relaxed">{formatGeofence(g)}</p>
                     </div>
-                    <Switch checked={g.isActive} onCheckedChange={v => handleToggleGeofence(g.id, v)} />
-                    <Button variant="ghost" size="icon" onClick={() => handleDeleteGeofence(g.id)} className="rounded-lg">
-                      <Trash2 className="h-4 w-4 text-destructive" />
-                    </Button>
+                    <Switch checked={g.isActive} onCheckedChange={(v) => handleToggleGeofence(g.id, v)} />
+                    <Button variant="ghost" size="icon" onClick={() => handleDeleteGeofence(g.id)} className="rounded-lg"><Trash2 className="h-4 w-4 text-destructive" /></Button>
                   </CardContent>
                 </Card>
               ))}
@@ -251,9 +185,8 @@ const AdminDashboard = () => {
             </div>
           </TabsContent>
 
-          {/* Attendance Tab */}
           <TabsContent value="attendance" className="space-y-2">
-            {records.slice(0, 50).map(r => (
+            {records.slice(0, 50).map((r) => (
               <Card key={r.id} className="border-border/30">
                 <CardContent className="p-3.5 flex items-center gap-3">
                   <div className={`h-8 w-8 rounded-lg flex items-center justify-center shrink-0 ${r.status === 'valid' ? 'bg-success/10' : 'bg-destructive/10'}`}>
@@ -279,9 +212,8 @@ const AdminDashboard = () => {
             )}
           </TabsContent>
 
-          {/* Anomalies Tab */}
           <TabsContent value="anomalies" className="space-y-2">
-            {anomalies.map(a => (
+            {anomalies.map((a) => (
               <Card key={a.id} className="border-border/30 border-l-2 border-l-warning">
                 <CardContent className="p-3.5">
                   <div className="flex items-center gap-2 mb-1">
@@ -302,14 +234,11 @@ const AdminDashboard = () => {
             )}
           </TabsContent>
 
-          {/* Users Tab */}
           <TabsContent value="users" className="space-y-2">
-            {users.map(u => (
+            {users.map((u) => (
               <Card key={u.id} className="border-border/30">
                 <CardContent className="p-3.5 flex items-center gap-3">
-                  <div className="h-9 w-9 rounded-xl bg-primary/10 flex items-center justify-center text-sm font-bold text-primary shrink-0">
-                    {u.name.charAt(0)}
-                  </div>
+                  <div className="h-9 w-9 rounded-xl bg-primary/10 flex items-center justify-center text-sm font-bold text-primary shrink-0">{u.name.charAt(0)}</div>
                   <div className="flex-1 min-w-0">
                     <p className="text-sm font-medium">{u.name}</p>
                     <p className="text-xs text-muted-foreground">{u.email} {u.department && `· ${u.department}`}</p>

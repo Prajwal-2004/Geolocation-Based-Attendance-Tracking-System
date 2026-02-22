@@ -1,19 +1,10 @@
-import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
-import { User } from '@/types';
+import React, { createContext, useContext, useState, useEffect } from 'react';
 import { getCurrentUser, loginUser, logoutUser, registerUser, seedDefaultAdmin } from '@/lib/storage';
 
-interface AuthContextType {
-  user: User | null;
-  login: (email: string, password: string) => User;
-  register: (data: Omit<User, 'id' | 'createdAt'>, password: string) => User;
-  logout: () => void;
-  isLoading: boolean;
-}
+const AuthContext = createContext(null);
 
-const AuthContext = createContext<AuthContextType | null>(null);
-
-export const AuthProvider = ({ children }: { children: ReactNode }) => {
-  const [user, setUser] = useState<User | null>(null);
+export const AuthProvider = ({ children }) => {
+  const [user, setUser] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
@@ -23,13 +14,13 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     setIsLoading(false);
   }, []);
 
-  const login = (email: string, password: string) => {
+  const login = (email, password) => {
     const u = loginUser(email, password);
     setUser(u);
     return u;
   };
 
-  const register = (data: Omit<User, 'id' | 'createdAt'>, password: string) => {
+  const register = (data, password) => {
     const u = registerUser(data, password);
     setUser(u);
     return u;
