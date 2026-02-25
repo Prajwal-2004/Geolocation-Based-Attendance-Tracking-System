@@ -1,6 +1,6 @@
 # GeoAttend — Geolocation-Based Attendance Tracking System
 
-A mobile-first attendance tracking application that uses real-time GPS coordinates and radius-based geofencing to verify user presence before logging attendance. Built with React (JSX), JavaScript, and Tailwind CSS, designed to run as a native mobile app via Capacitor.
+A mobile-first attendance tracking application that uses real-time GPS coordinates and polygon-based geofencing to verify user presence before logging attendance. Built with React, TypeScript, and Tailwind CSS, designed to run as a native mobile app via Capacitor.
 
 ---
 
@@ -8,11 +8,11 @@ A mobile-first attendance tracking application that uses real-time GPS coordinat
 
 - **Role-based authentication** (Student, Faculty, Admin)
 - **GPS-based check-in/check-out** with real-time location capture
-- **Radius-based geofencing** — admin defines a center point and radius in meters
-- **Haversine formula** for accurate great-circle distance calculation
+- **4-corner polygon geofencing** — admin defines classroom boundaries using 4 coordinate points
+- **Ray Casting algorithm** for point-in-polygon validation
+- **Haversine formula** for distance calculation and reporting
 - **Anti-spoofing measures** — timestamp consistency checks, GPS accuracy validation
 - **Admin dashboard** — geofence configuration, attendance records, anomaly reports, user management
-- **Two-step check-in** — capture location first, then verify and check in
 - **Duplicate prevention** — prevents multiple active check-ins
 - **Anomaly logging** — flags suspicious activity for admin review
 - **Offline-capable** — all data stored locally via localStorage
@@ -25,52 +25,57 @@ A mobile-first attendance tracking application that uses real-time GPS coordinat
 
 | File | Purpose |
 |------|---------|
-| `src/main.jsx` | Entry point. Mounts the React app to the DOM. |
-| `src/App.jsx` | Root component. Defines routes, wraps app with AuthProvider, QueryClient, and UI providers. Contains `ProtectedRoute` and `AuthRoute` logic for role-based access control. |
+| `src/main.tsx` | Entry point. Mounts the React app to the DOM. |
+| `src/App.tsx` | Root component. Defines routes, wraps app with AuthProvider, QueryClient, and UI providers. Contains `ProtectedRoute` and `AuthRoute` logic for role-based access control. |
 | `index.html` | HTML shell with mobile-optimized viewport meta tags and PWA-ready attributes. |
+
+### Types
+
+| File | Purpose |
+|------|---------|
+| `src/types/index.ts` | TypeScript type definitions for `User`, `Geofence` (with `PolygonPoint[]` corners), `AttendanceRecord`, `LocationData`, and `AnomalyLog`. Central schema for all data structures. |
 
 ### Core Logic (Business Logic Layer)
 
 | File | Purpose |
 |------|---------|
-| `src/lib/storage.js` | **Backend & Database Module** — Manages all data persistence via localStorage. Provides CRUD operations for users, geofences, attendance records, and anomalies. Handles user registration and login with base64 password encoding. Seeds a default admin account on first run. |
-| `src/lib/geofence.js` | **Location & Geofence Validation Module** — Implements the **Haversine formula** for distance calculation, `validateLocation()` for radius-based geofence checking, `validateTimestamp()` and `checkGpsAccuracy()` for anti-spoofing, and `getCurrentLocation()` wrapper for the browser Geolocation API. |
+| `src/lib/storage.ts` | **Backend & Database Module** — Manages all data persistence via localStorage. Provides CRUD operations for users, geofences, attendance records, and anomalies. Handles user registration and login with base64 password encoding. Seeds a default admin account on first run. |
+| `src/lib/geofence.ts` | **Location & Geofence Validation Module** — Implements the **Haversine formula** for distance calculation, the **Ray Casting algorithm** for polygon-based boundary checking, `validateLocation()` with support for both polygon and circular geofences, `validateTimestamp()` and `checkGpsAccuracy()` for anti-spoofing, and `getCurrentLocation()` wrapper for the browser Geolocation API. |
 
 ### Authentication
 
 | File | Purpose |
 |------|---------|
-| `src/contexts/AuthContext.jsx` | **User Authentication Module** — React context providing `login()`, `register()`, `logout()`, and current `user` state throughout the app. Seeds the default admin on mount. |
+| `src/contexts/AuthContext.tsx` | **User Authentication Module** — React context providing `login()`, `register()`, `logout()`, and current `user` state throughout the app. Seeds the default admin on mount. |
 
 ### Pages (UI Layer)
 
 | File | Purpose |
 |------|---------|
-| `src/pages/Index.jsx` | Landing page with GeoAttend logo, hamburger menu navigation, and feature cards. |
-| `src/pages/Login.jsx` | Login screen with email/password form, show/hide password toggle, demo admin credentials, and link to registration. |
-| `src/pages/Register.jsx` | Registration screen with role selection (Student/Faculty), department, and optional student ID fields. |
-| `src/pages/Dashboard.jsx` | **Attendance Management Module** — Student/Faculty dashboard. Two-step check-in flow: capture GPS location first, review coordinates, then check in. Orchestrates: location capture → anti-spoofing validation → geofence matching (Haversine distance vs radius) → record creation or rejection. |
-| `src/pages/AdminDashboard.jsx` | **Admin Dashboard & Reporting Module** — Tabbed interface with: (1) Geofence zone management with center point + radius input and GPS capture, (2) Attendance records with distance and status, (3) Anomaly flags with type labels, (4) User list with roles. Shows aggregate statistics at the top. |
-| `src/pages/NotFound.jsx` | 404 fallback page. |
+| `src/pages/Login.tsx` | Login screen with email/password form, show/hide password toggle, demo admin credentials, and link to registration. |
+| `src/pages/Register.tsx` | Registration screen with role selection (Student/Faculty), department, and optional student ID fields. |
+| `src/pages/Dashboard.tsx` | **Attendance Management Module** — Student/Faculty dashboard. Shows check-in/check-out button with pulsing animation, current status, today's stats, and recent attendance history. Orchestrates the full check-in flow: location capture → anti-spoofing validation → geofence matching → record creation or rejection. |
+| `src/pages/AdminDashboard.tsx` | **Admin Dashboard & Reporting Module** — Tabbed interface with: (1) Geofence zone management with 4-corner coordinate input, (2) Attendance records with distance and status, (3) Anomaly flags with type labels, (4) User list with roles. Shows aggregate statistics at the top. |
+| `src/pages/NotFound.tsx` | 404 fallback page. |
 
 ### Design System
 
 | File | Purpose |
 |------|---------|
-| `src/index.css` | CSS design tokens with HSL color variables, custom scrollbar, and font imports. |
-| `tailwind.config.ts` | Tailwind configuration extending the base with semantic color tokens, custom animations, and border radius tokens. |
+| `src/index.css` | CSS design tokens. Dark navy (`#0F172A`) background with emerald (`#10B981`) primary accent. Defines all HSL color variables, custom scrollbar, and font imports (Inter + JetBrains Mono). |
+| `tailwind.config.ts` | Tailwind configuration extending the base with semantic color tokens (background, foreground, primary, card, warning, success, etc.), custom animations (`pulse-ring`, `slide-up`), and border radius tokens. |
 
 ### UI Components (shadcn/ui)
 
-All files in `src/components/ui/` are pre-built, accessible UI primitives from shadcn/ui (Button, Card, Input, Badge, Tabs, Sheet, Select, Switch, Toast, etc.). They use the design tokens from `index.css`. These remain in TypeScript (.tsx) as they are library components.
+All files in `src/components/ui/` are pre-built, accessible UI primitives from shadcn/ui (Button, Card, Input, Badge, Tabs, Sheet, Select, Switch, Toast, etc.). They use the design tokens from `index.css`.
 
 ---
 
-## 🧮 Algorithm Used
+## 🧮 Algorithms Used
 
-### Haversine Formula (Distance Calculation)
+### 1. Haversine Formula (Distance Calculation)
 
-The Haversine formula calculates the **great-circle distance** between two points on Earth given their latitude and longitude. Used to determine if a student is within the allowed radius of a geofence center.
+The Haversine formula calculates the **great-circle distance** between two points on Earth given their latitude and longitude. Used to report how far a student is from the classroom center.
 
 **Formula:**
 ```
@@ -81,16 +86,44 @@ d = R · c
 
 Where **R = 6,371,000 meters** (Earth's radius). The result `d` gives the distance in meters.
 
-**How geofence validation works:**
-1. Admin sets a center point (latitude, longitude) and radius in meters for each zone.
-2. When a student checks in, the Haversine formula calculates the distance between the student's GPS position and the geofence center.
-3. If `distance ≤ radius`, the check-in is **valid**. Otherwise, it is **rejected**.
-
-**Used in:** `src/lib/geofence.js` → `haversineDistance()` and `validateLocation()`
+**Used in:** `src/lib/geofence.ts` → `haversineDistance()`
 
 ---
 
-### Anti-Spoofing Checks
+### 2. Ray Casting Algorithm (Point-in-Polygon Check)
+
+The Ray Casting algorithm determines whether a point (student's GPS location) lies **inside** a polygon (classroom boundary defined by 4 corners).
+
+**How it works:**
+1. Cast an imaginary horizontal ray from the student's GPS point to the right.
+2. Count how many edges of the polygon the ray crosses.
+3. **Odd crossings → inside** the polygon. **Even crossings → outside**.
+
+```
+Corner B ────────── Corner C
+   |    📍 Student    |      ← Ray crosses 1 edge → INSIDE ✅
+   |                  |
+Corner A ────────── Corner D
+```
+
+**Why it works:** Entering a closed polygon always requires crossing one edge. Exiting adds another crossing. Therefore:
+- 0 crossings = outside
+- 1 crossing = **inside**
+- 2 crossings = outside
+- 3 crossings = **inside**
+- ... (odd = inside, even = outside)
+
+**For each edge**, the algorithm checks:
+1. Is the point's latitude **between** the edge's two endpoints? (vertical range)
+2. Is the point **to the left** of the intersection? (horizontal check)
+
+**Accuracy Note:** At classroom scale (~10-50m), the Earth's curvature is negligible, so treating lat/lng as flat 2D coordinates is perfectly valid.
+
+**Used in:** `src/lib/geofence.ts` → `pointInPolygon()`
+
+---
+
+### 3. Anti-Spoofing Checks
 
 | Check | Description | File |
 |-------|-------------|------|
@@ -131,6 +164,7 @@ npm run dev
 ### VS Code Recommended Extensions
 - **ES7+ React/Redux/React-Native snippets** — React code shortcuts
 - **Tailwind CSS IntelliSense** — Autocomplete for Tailwind classes
+- **TypeScript Importer** — Auto-import TypeScript modules
 - **Prettier** — Code formatting
 
 ---
@@ -205,8 +239,8 @@ Students and faculty can register via the registration page.
 ```
 ┌──────────────────┐     ┌───────────────────┐     ┌──────────────────┐
 │   Mobile App     │────▶│  Geofence Engine   │────▶│  localStorage    │
-│  (React + Cap.)  │     │  (Haversine dist.  │     │  (JSON storage)  │
-│                  │     │   calculation)     │     │                  │
+│  (React + Cap.)  │     │  (Ray Casting +    │     │  (JSON storage)  │
+│                  │     │   Haversine calc)  │     │                  │
 └──────────────────┘     └───────────────────┘     └──────────────────┘
         │                         │
         ▼                         ▼
@@ -220,14 +254,10 @@ Students and faculty can register via the registration page.
 ### Validation Flow
 
 ```
-Student taps "Capture Location"
+Student taps "Check In"
         │
         ▼
-  GPS coordinates displayed
-  (lat, lon, accuracy, time)
-        │
-        ▼
-  Student taps "Check In"
+  Capture GPS coordinates
         │
         ▼
   Anti-spoofing checks
@@ -235,8 +265,8 @@ Student taps "Capture Location"
         │
         ▼
   For each active geofence:
-    Haversine distance calculation
-    (Is student within radius?)
+    Run Ray Casting algorithm
+    (Is student inside the 4-corner polygon?)
         │
     ┌───┴───┐
     YES     NO
@@ -252,8 +282,7 @@ Student taps "Capture Location"
 ## 📋 Technologies Used
 
 - **React 18** — UI framework
-- **JavaScript (JSX)** — Application logic (core files)
-- **TypeScript (TSX)** — UI component library (shadcn/ui)
+- **TypeScript** — Type safety
 - **Tailwind CSS** — Utility-first styling
 - **shadcn/ui** — Accessible component library
 - **Vite** — Build tool with HMR

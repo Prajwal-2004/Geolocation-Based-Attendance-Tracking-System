@@ -13,7 +13,7 @@ import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
 
-const ProtectedRoute = ({ children, adminOnly = false }) => {
+const ProtectedRoute = ({ children, adminOnly = false }: { children: React.ReactNode; adminOnly?: boolean }) => {
   const { user, isLoading } = useAuth();
   if (isLoading) return <div className="flex min-h-screen items-center justify-center"><p className="text-muted-foreground">Loading...</p></div>;
   if (!user) return <Navigate to="/login" replace />;
@@ -21,7 +21,7 @@ const ProtectedRoute = ({ children, adminOnly = false }) => {
   return <>{children}</>;
 };
 
-const AuthRoute = ({ children }) => {
+const AuthRoute = ({ children }: { children: React.ReactNode }) => {
   const { user, isLoading } = useAuth();
   if (isLoading) return null;
   if (user) return <Navigate to={user.role === 'admin' ? '/admin' : '/dashboard'} replace />;
@@ -50,3 +50,4 @@ const App = () => (
 );
 
 export default App;
+
