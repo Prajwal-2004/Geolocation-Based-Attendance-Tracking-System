@@ -145,7 +145,7 @@ const Index = () => {
       {/* Footer */}
       <footer className="relative z-10 border-t border-border/30 py-6 text-center">
         <p className="text-xs text-muted-foreground">
-          GeoAttend — Haversine & Ray Casting powered attendance
+          GeoAttend — Haversine Powered Attendance
         </p>
       </footer>
     </div>

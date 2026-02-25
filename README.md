@@ -88,42 +88,7 @@ Where **R = 6,371,000 meters** (Earth's radius). The result `d` gives the distan
 
 **Used in:** `src/lib/geofence.ts` → `haversineDistance()`
 
----
-
-### 2. Ray Casting Algorithm (Point-in-Polygon Check)
-
-The Ray Casting algorithm determines whether a point (student's GPS location) lies **inside** a polygon (classroom boundary defined by 4 corners).
-
-**How it works:**
-1. Cast an imaginary horizontal ray from the student's GPS point to the right.
-2. Count how many edges of the polygon the ray crosses.
-3. **Odd crossings → inside** the polygon. **Even crossings → outside**.
-
-```
-Corner B ────────── Corner C
-   |    📍 Student    |      ← Ray crosses 1 edge → INSIDE ✅
-   |                  |
-Corner A ────────── Corner D
-```
-
-**Why it works:** Entering a closed polygon always requires crossing one edge. Exiting adds another crossing. Therefore:
-- 0 crossings = outside
-- 1 crossing = **inside**
-- 2 crossings = outside
-- 3 crossings = **inside**
-- ... (odd = inside, even = outside)
-
-**For each edge**, the algorithm checks:
-1. Is the point's latitude **between** the edge's two endpoints? (vertical range)
-2. Is the point **to the left** of the intersection? (horizontal check)
-
-**Accuracy Note:** At classroom scale (~10-50m), the Earth's curvature is negligible, so treating lat/lng as flat 2D coordinates is perfectly valid.
-
-**Used in:** `src/lib/geofence.ts` → `pointInPolygon()`
-
----
-
-### 3. Anti-Spoofing Checks
+### 2. Anti-Spoofing Checks
 
 | Check | Description | File |
 |-------|-------------|------|
