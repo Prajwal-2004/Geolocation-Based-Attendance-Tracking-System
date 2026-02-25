@@ -25,6 +25,7 @@ const AdminDashboard = () => {
 
   // Geofence form — 4 corners with GPS capture
   const [gName, setGName] = useState('');
+  const [gAccuracy, setGAccuracy] = useState('');
   const [corners, setCorners] = useState<Array<{ lat: string; lon: string }>>([
     { lat: '', lon: '' },
     { lat: '', lon: '' },
@@ -62,17 +63,20 @@ const AdminDashboard = () => {
     }
     const centerLat = parsedCorners.reduce((s, c) => s + c.latitude, 0) / 4;
     const centerLon = parsedCorners.reduce((s, c) => s + c.longitude, 0) / 4;
+    const accuracyVal = parseFloat(gAccuracy);
     const g = addGeofence({
       name: gName,
       latitude: centerLat,
       longitude: centerLon,
       radiusMeters: 0,
       corners: parsedCorners,
+      accuracyMeters: !isNaN(accuracyVal) && accuracyVal > 0 ? accuracyVal : undefined,
       createdBy: user!.id,
       isActive: true,
     });
     setGeofences([...geofences, g]);
     setGName('');
+    setGAccuracy('');
     setCorners([{ lat: '', lon: '' }, { lat: '', lon: '' }, { lat: '', lon: '' }, { lat: '', lon: '' }]);
     toast({ title: 'Geofence created', description: g.name });
   };
@@ -92,10 +96,11 @@ const AdminDashboard = () => {
   const todayCount = records.filter(r => new Date(r.checkInTime).toDateString() === new Date().toDateString()).length;
 
   const formatCorners = (g: Geofence) => {
+    const accuracy = g.accuracyMeters ? ` · ≤${g.accuracyMeters}m` : '';
     if (g.corners && g.corners.length === 4) {
-      return g.corners.map((c, i) => `C${i + 1}(${c.latitude.toFixed(4)}, ${c.longitude.toFixed(4)})`).join(' · ');
+      return g.corners.map((c, i) => `C${i + 1}(${c.latitude.toFixed(4)}, ${c.longitude.toFixed(4)})`).join(' · ') + accuracy;
     }
-    return `${g.latitude.toFixed(4)}, ${g.longitude.toFixed(4)} · ${g.radiusMeters}m`;
+    return `${g.latitude.toFixed(4)}, ${g.longitude.toFixed(4)} · ${g.radiusMeters}m` + accuracy;
   };
 
   const cornerLabels = ['Front-Left', 'Front-Right', 'Back-Right', 'Back-Left'];
@@ -161,6 +166,20 @@ const AdminDashboard = () => {
                     required
                     className="bg-secondary/40 border-border/50 h-11"
                   />
+
+                  <div className="rounded-xl border border-border/30 bg-secondary/20 p-3 space-y-1.5">
+                    <p className="text-xs font-medium text-muted-foreground">Accurate up to (meters)</p>
+                    <p className="text-[10px] text-muted-foreground/70">Students within this distance from the zone center will be marked present. Leave empty to auto-calculate from corners.</p>
+                    <Input
+                      placeholder="e.g., 50"
+                      type="number"
+                      min="1"
+                      step="1"
+                      value={gAccuracy}
+                      onChange={e => setGAccuracy(e.target.value)}
+                      className="bg-secondary/40 border-border/50 h-9 text-sm"
+                    />
+                  </div>
 
                   <div className="grid gap-3">
                     {corners.map((corner, i) => (

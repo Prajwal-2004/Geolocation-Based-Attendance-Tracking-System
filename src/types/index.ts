@@ -26,6 +26,8 @@ export interface Geofence {
   radiusMeters: number;
   /** Four corner coordinates defining the classroom boundary */
   corners?: PolygonPoint[];
+  /** Admin-defined accuracy threshold in meters — student must be within this distance from centroid */
+  accuracyMeters?: number;
   createdBy: string;
   createdAt: string;
   isActive: boolean;

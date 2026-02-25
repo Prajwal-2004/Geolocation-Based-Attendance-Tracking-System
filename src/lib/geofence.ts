@@ -62,7 +62,10 @@ export function validateLocation(
       location.latitude, location.longitude,
       center.latitude, center.longitude
     );
-    const maxDistance = getMaxCornerDistance(geofence.corners);
+    // Use admin-defined accuracyMeters if set, otherwise fall back to max corner distance
+    const maxDistance = geofence.accuracyMeters && geofence.accuracyMeters > 0
+      ? geofence.accuracyMeters
+      : getMaxCornerDistance(geofence.corners);
     return {
       isValid: distance <= maxDistance,
       distance: Math.round(distance),
@@ -75,10 +78,13 @@ export function validateLocation(
     location.latitude, location.longitude,
     geofence.latitude, geofence.longitude
   );
+  const maxDistance = geofence.accuracyMeters && geofence.accuracyMeters > 0
+    ? geofence.accuracyMeters
+    : geofence.radiusMeters;
   return {
-    isValid: distance <= geofence.radiusMeters,
+    isValid: distance <= maxDistance,
     distance: Math.round(distance),
-    maxDistance: geofence.radiusMeters,
+    maxDistance: maxDistance,
   };
 }
 
