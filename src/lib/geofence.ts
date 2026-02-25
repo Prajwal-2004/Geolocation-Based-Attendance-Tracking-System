@@ -102,24 +102,56 @@ export function checkGpsAccuracy(accuracy: number): boolean {
 
 /**
  * Gets the user's current location using the browser Geolocation API.
+ * Uses watchPosition to wait for the most accurate reading within the timeout.
+ * This avoids the common issue where getCurrentPosition returns a cached,
+ * low-accuracy (Wi-Fi/cell tower) fix before GPS has locked on.
  */
-export function getCurrentLocation(): Promise<LocationData> {
+export function getCurrentLocation(maxAccuracy: number = 30, timeoutMs: number = 15000): Promise<LocationData> {
   return new Promise((resolve, reject) => {
     if (!navigator.geolocation) {
       reject(new Error('Geolocation is not supported by this device'));
       return;
     }
 
-    navigator.geolocation.getCurrentPosition(
+    let bestResult: LocationData | null = null;
+    let watchId: number;
+
+    const finish = () => {
+      navigator.geolocation.clearWatch(watchId);
+      if (bestResult) {
+        resolve(bestResult);
+      } else {
+        reject(new Error('Could not get an accurate location. Please try again outdoors.'));
+      }
+    };
+
+    // Timeout: resolve with best result so far (or reject if none)
+    const timer = setTimeout(finish, timeoutMs);
+
+    watchId = navigator.geolocation.watchPosition(
       (position) => {
-        resolve({
+        const current: LocationData = {
           latitude: position.coords.latitude,
           longitude: position.coords.longitude,
           accuracy: position.coords.accuracy,
           timestamp: position.timestamp,
-        });
+        };
+
+        // Keep the most accurate reading
+        if (!bestResult || current.accuracy < bestResult.accuracy) {
+          bestResult = current;
+        }
+
+        // If accuracy is good enough, resolve immediately
+        if (current.accuracy <= maxAccuracy) {
+          clearTimeout(timer);
+          navigator.geolocation.clearWatch(watchId);
+          resolve(current);
+        }
       },
       (error) => {
+        clearTimeout(timer);
+        navigator.geolocation.clearWatch(watchId);
         switch (error.code) {
           case error.PERMISSION_DENIED:
             reject(new Error('Location permission denied. Please enable GPS.'));
@@ -128,7 +160,12 @@ export function getCurrentLocation(): Promise<LocationData> {
             reject(new Error('Location unavailable. Please check GPS settings.'));
             break;
           case error.TIMEOUT:
-            reject(new Error('Location request timed out. Please try again.'));
+            // If we have a best result, use it even if not ideal accuracy
+            if (bestResult) {
+              resolve(bestResult);
+            } else {
+              reject(new Error('Location request timed out. Please try again.'));
+            }
             break;
           default:
             reject(new Error('Failed to get location.'));
@@ -136,7 +173,7 @@ export function getCurrentLocation(): Promise<LocationData> {
       },
       {
         enableHighAccuracy: true,
-        timeout: 10000,
+        timeout: timeoutMs,
         maximumAge: 0,
       }
     );

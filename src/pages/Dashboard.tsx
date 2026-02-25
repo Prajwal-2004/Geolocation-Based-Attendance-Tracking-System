@@ -30,9 +30,12 @@ const Dashboard = () => {
     setIsCapturing(true);
     setCapturedLocation(null);
     try {
-      const location = await getCurrentLocation();
+      const location = await getCurrentLocation(30, 15000);
       setCapturedLocation(location);
-      toast({ title: 'Location captured', description: 'Your GPS coordinates have been acquired.' });
+      const accuracyNote = location.accuracy > 30
+        ? ` (accuracy: ~${Math.round(location.accuracy)}m — try moving outdoors for better GPS)`
+        : ` (accurate up to ${Math.round(location.accuracy)}m)`;
+      toast({ title: 'Location captured', description: `GPS coordinates acquired${accuracyNote}` });
     } catch (err: any) {
       toast({ title: 'Error', description: err.message, variant: 'destructive' });
     }
