@@ -92,7 +92,7 @@ const Dashboard = () => {
           setRecords([record, ...records]);
           matched = true;
           setCapturedLocation(null);
-          toast({ title: 'Checked in!', description: `${geofence.name} — ${result.distance}m from center` });
+          toast({ title: 'Checked in!', description: `${geofence.name} — ${result.distance}m from center (accurate up to ${Math.round(capturedLocation.accuracy)}m)` });
           break;
         }
       }
@@ -100,9 +100,7 @@ const Dashboard = () => {
       if (!matched) {
         const nearest = geofences[0];
         const result = validateLocation(location, nearest);
-        const reason = nearest.corners && nearest.corners.length >= 3
-          ? `Outside classroom boundary (${result.distance}m from center)`
-          : `Outside geofence boundary (${result.distance}m from center, max ${nearest.radiusMeters}m)`;
+        const reason = `Outside geofence boundary (${result.distance}m from center, max ${result.maxDistance}m, accurate up to ${Math.round(location.accuracy)}m)`;
         addAttendanceRecord({
           userId: user.id, userName: user.name, userRole: user.role,
           geofenceId: nearest.id, geofenceName: nearest.name,
@@ -220,8 +218,8 @@ const Dashboard = () => {
                       <p className="font-mono font-medium">{capturedLocation.longitude.toFixed(6)}</p>
                     </div>
                     <div>
-                      <p className="text-[10px] text-muted-foreground uppercase">Accuracy</p>
-                      <p className="font-mono font-medium">{capturedLocation.accuracy.toFixed(1)}m</p>
+                      <p className="text-[10px] text-muted-foreground uppercase">Accurate up to</p>
+                      <p className="font-mono font-medium">{Math.round(capturedLocation.accuracy)}m</p>
                     </div>
                     <div>
                       <p className="text-[10px] text-muted-foreground uppercase">Time</p>

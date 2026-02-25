@@ -24,39 +24,6 @@ export function haversineDistance(
 }
 
 /**
- * Ray Casting Algorithm: determines if a point lies inside a polygon.
- * 
- * How it works:
- * 1. Cast an imaginary horizontal ray from the point to the right.
- * 2. Count how many edges of the polygon the ray crosses.
- * 3. If the count is odd, the point is inside; if even, it's outside.
- * 
- * This works because entering a polygon always adds one crossing,
- * and exiting adds another. So inside = odd crossings.
- */
-export function pointInPolygon(
-  point: { latitude: number; longitude: number },
-  polygon: PolygonPoint[]
-): boolean {
-  let inside = false;
-  const n = polygon.length;
-
-  for (let i = 0, j = n - 1; i < n; j = i++) {
-    const xi = polygon[i].latitude, yi = polygon[i].longitude;
-    const xj = polygon[j].latitude, yj = polygon[j].longitude;
-
-    // Check if the ray crosses this edge
-    const intersect =
-      yi > point.longitude !== yj > point.longitude &&
-      point.latitude < ((xj - xi) * (point.longitude - yi)) / (yj - yi) + xi;
-
-    if (intersect) inside = !inside;
-  }
-
-  return inside;
-}
-
-/**
  * Calculates the centroid (geometric center) of a polygon.
  */
 export function getPolygonCenter(corners: PolygonPoint[]): { latitude: number; longitude: number } {
@@ -66,25 +33,41 @@ export function getPolygonCenter(corners: PolygonPoint[]): { latitude: number; l
 }
 
 /**
+ * Calculates the maximum Haversine distance from the centroid to any corner.
+ * This is used as the effective radius of a polygon geofence.
+ */
+export function getMaxCornerDistance(corners: PolygonPoint[]): number {
+  const center = getPolygonCenter(corners);
+  let maxDist = 0;
+  for (const corner of corners) {
+    const d = haversineDistance(center.latitude, center.longitude, corner.latitude, corner.longitude);
+    if (d > maxDist) maxDist = d;
+  }
+  return maxDist;
+}
+
+/**
  * Validates whether a user's location falls within a geofence boundary.
- * Supports both polygon (4-corner) and legacy circular geofences.
+ * For polygon geofences (4 corners): calculates centroid, then checks if
+ * the user's Haversine distance from centroid is within the max corner distance.
+ * For legacy circular geofences: checks distance against radiusMeters.
  */
 export function validateLocation(
   location: LocationData,
   geofence: Geofence
-): { isValid: boolean; distance: number } {
+): { isValid: boolean; distance: number; maxDistance: number } {
   if (geofence.corners && geofence.corners.length >= 3) {
-    // Polygon-based validation using Ray Casting
-    const isInside = pointInPolygon(
-      { latitude: location.latitude, longitude: location.longitude },
-      geofence.corners
-    );
     const center = getPolygonCenter(geofence.corners);
     const distance = haversineDistance(
       location.latitude, location.longitude,
       center.latitude, center.longitude
     );
-    return { isValid: isInside, distance: Math.round(distance) };
+    const maxDistance = getMaxCornerDistance(geofence.corners);
+    return {
+      isValid: distance <= maxDistance,
+      distance: Math.round(distance),
+      maxDistance: Math.round(maxDistance),
+    };
   }
 
   // Legacy circular geofence fallback
@@ -95,6 +78,7 @@ export function validateLocation(
   return {
     isValid: distance <= geofence.radiusMeters,
     distance: Math.round(distance),
+    maxDistance: geofence.radiusMeters,
   };
 }
 
