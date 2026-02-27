@@ -115,7 +115,7 @@ const Index = () => {
             {
               icon: MapPin,
               title: 'Polygon Geofencing',
-              desc: '4-corner classroom boundaries with Ray Casting validation',
+              desc: '4-corner classroom boundaries with Haversine validation',
             },
             {
               icon: Shield,
