@@ -28,6 +28,10 @@ export interface Geofence {
   corners?: PolygonPoint[];
   /** Admin-defined accuracy threshold in meters — student must be within this distance from centroid */
   accuracyMeters?: number;
+  /** Class start time in HH:MM format */
+  classStartTime?: string;
+  /** Days of week the class runs (0=Sun, 1=Mon, ..., 6=Sat) */
+  classDays?: number[];
   createdBy: string;
   createdAt: string;
   isActive: boolean;

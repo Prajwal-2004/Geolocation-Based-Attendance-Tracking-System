@@ -1,14 +1,15 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { LogIn, LogOut, Clock, CheckCircle2, XCircle, Navigation, Menu, Shield, MapPin, Crosshair } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { getCurrentLocation } from '@/lib/geofence';
 import { validateLocation, validateTimestamp, checkGpsAccuracy } from '@/lib/geofence';
 import { getGeofences, getAttendanceRecords, addAttendanceRecord, updateAttendanceRecord, addAnomaly } from '@/lib/storage';
-import { AttendanceRecord, LocationData } from '@/types';
+import { AttendanceRecord, LocationData, Geofence } from '@/types';
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from '@/components/ui/sheet';
 import { useNavigate } from 'react-router-dom';
 
@@ -19,6 +20,8 @@ const Dashboard = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [isCapturing, setIsCapturing] = useState(false);
   const [capturedLocation, setCapturedLocation] = useState<LocationData | null>(null);
+  const [selectedGeofenceId, setSelectedGeofenceId] = useState<string>('');
+  const activeGeofences = useMemo(() => getGeofences().filter(g => g.isActive), []);
   const [records, setRecords] = useState<AttendanceRecord[]>(() =>
     getAttendanceRecords().filter(r => r.userId === user?.id).reverse()
   );
@@ -43,7 +46,7 @@ const Dashboard = () => {
   };
 
   const handleCheckIn = async () => {
-    if (!user || !capturedLocation) return;
+    if (!user || !capturedLocation || !selectedGeofenceId) return;
     setIsLoading(true);
     try {
       const location = capturedLocation;
@@ -62,11 +65,30 @@ const Dashboard = () => {
         return;
       }
 
-      const geofences = getGeofences().filter(g => g.isActive);
-      if (geofences.length === 0) {
-        toast({ title: 'No geofences', description: 'No active geofences configured. Contact admin.', variant: 'destructive' });
+      const geofence = activeGeofences.find(g => g.id === selectedGeofenceId);
+      if (!geofence) {
+        toast({ title: 'Error', description: 'Selected class not found.', variant: 'destructive' });
         setIsLoading(false);
         return;
+      }
+
+      // 5-minute buffer check using device time
+      if (geofence.classStartTime) {
+        const now = new Date();
+        const [startH, startM] = geofence.classStartTime.split(':').map(Number);
+        const classStart = new Date(now);
+        classStart.setHours(startH, startM, 0, 0);
+        const diffMin = (now.getTime() - classStart.getTime()) / 60000;
+        // Student can check in from class start time up to 5 minutes after
+        if (diffMin < 0 || diffMin > 5) {
+          const timeStr = geofence.classStartTime;
+          const reason = diffMin < 0
+            ? `Class hasn't started yet (starts at ${timeStr})`
+            : `Check-in window expired (class started at ${timeStr}, 5-min buffer exceeded)`;
+          toast({ title: 'Check-in rejected', description: reason, variant: 'destructive' });
+          setIsLoading(false);
+          return;
+        }
       }
 
       const todayRecords = getAttendanceRecords().filter(r =>
@@ -81,40 +103,33 @@ const Dashboard = () => {
         return;
       }
 
-      let matched = false;
-      for (const geofence of geofences) {
-        const result = validateLocation(location, geofence);
-        if (result.isValid) {
-          const record = addAttendanceRecord({
-            userId: user.id, userName: user.name, userRole: user.role,
-            geofenceId: geofence.id, geofenceName: geofence.name,
-            checkInTime: new Date().toISOString(),
-            latitude: location.latitude, longitude: location.longitude,
-            distanceFromCenter: result.distance, status: 'valid',
-          });
-          setRecords([record, ...records]);
-          matched = true;
-          setCapturedLocation(null);
-          toast({ title: 'Checked in!', description: `${geofence.name} — ${result.distance}m from center (accurate up to ${Math.round(capturedLocation.accuracy)}m)` });
-          break;
-        }
-      }
-
-      if (!matched) {
-        const nearest = geofences[0];
-        const result = validateLocation(location, nearest);
-        const reason = `Outside geofence boundary (${result.distance}m from center, max ${result.maxDistance}m, accurate up to ${Math.round(location.accuracy)}m)`;
+      const result = validateLocation(location, geofence);
+      if (result.isValid) {
+        const record = addAttendanceRecord({
+          userId: user.id, userName: user.name, userRole: user.role,
+          geofenceId: geofence.id, geofenceName: geofence.name,
+          checkInTime: new Date().toISOString(),
+          latitude: location.latitude, longitude: location.longitude,
+          distanceFromCenter: result.distance, status: 'valid',
+        });
+        setRecords([record, ...records]);
+        setCapturedLocation(null);
+        setSelectedGeofenceId('');
+        toast({ title: 'Checked in!', description: `${geofence.name} — ${result.distance}m from center (accurate up to ${Math.round(capturedLocation.accuracy)}m)` });
+      } else {
+        const reason = `Outside ${geofence.name} boundary (${result.distance}m from center, max ${result.maxDistance}m, accurate up to ${Math.round(location.accuracy)}m)`;
         addAttendanceRecord({
           userId: user.id, userName: user.name, userRole: user.role,
-          geofenceId: nearest.id, geofenceName: nearest.name,
+          geofenceId: geofence.id, geofenceName: geofence.name,
           checkInTime: new Date().toISOString(),
           latitude: location.latitude, longitude: location.longitude,
           distanceFromCenter: result.distance, status: 'rejected',
           rejectionReason: reason,
         });
-        addAnomaly({ userId: user.id, userName: user.name, type: 'out_of_range', description: `User is ${result.distance}m from ${nearest.name}`, timestamp: new Date().toISOString(), locationData: location });
+        addAnomaly({ userId: user.id, userName: user.name, type: 'out_of_range', description: `User is ${result.distance}m from ${geofence.name}`, timestamp: new Date().toISOString(), locationData: location });
         setCapturedLocation(null);
-        toast({ title: 'Check-in rejected', description: `You are outside the ${nearest.name} boundary.`, variant: 'destructive' });
+        setSelectedGeofenceId('');
+        toast({ title: 'Check-in rejected', description: `You are outside the ${geofence.name} boundary.`, variant: 'destructive' });
       }
     } catch (err: any) {
       toast({ title: 'Error', description: err.message, variant: 'destructive' });
@@ -232,6 +247,28 @@ const Dashboard = () => {
                 </div>
               )}
 
+              {/* Class Selection */}
+              {capturedLocation && !activeCheckIn && (
+                <div className="space-y-1.5">
+                  <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Select Class</p>
+                  <Select value={selectedGeofenceId} onValueChange={setSelectedGeofenceId}>
+                    <SelectTrigger className="bg-secondary/40 border-border/50 h-11 rounded-xl">
+                      <SelectValue placeholder="Choose your class..." />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {activeGeofences.map(g => (
+                        <SelectItem key={g.id} value={g.id}>
+                          {g.name}{g.classStartTime ? ` (${g.classStartTime})` : ''}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  {activeGeofences.length === 0 && (
+                    <p className="text-xs text-destructive">No active classes available. Contact admin.</p>
+                  )}
+                </div>
+              )}
+
               {/* Action Buttons */}
               {activeCheckIn ? (
                 <Button onClick={handleCheckOut} disabled={isLoading} variant="destructive" className="w-full h-12 font-semibold rounded-xl shadow-lg" size="lg">
@@ -239,7 +276,7 @@ const Dashboard = () => {
                 </Button>
               ) : capturedLocation ? (
                 <div className="space-y-2">
-                  <Button onClick={handleCheckIn} disabled={isLoading} className="w-full h-12 font-semibold rounded-xl shadow-lg shadow-primary/20" size="lg">
+                  <Button onClick={handleCheckIn} disabled={isLoading || !selectedGeofenceId} className="w-full h-12 font-semibold rounded-xl shadow-lg shadow-primary/20" size="lg">
                     <LogIn className="mr-2 h-5 w-5" /> {isLoading ? 'Verifying...' : 'Check In'}
                   </Button>
                   <Button onClick={handleCaptureLocation} disabled={isCapturing} variant="outline" className="w-full rounded-xl" size="sm">

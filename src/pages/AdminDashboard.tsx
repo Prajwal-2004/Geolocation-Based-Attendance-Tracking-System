@@ -26,6 +26,7 @@ const AdminDashboard = () => {
   // Geofence form — 4 corners with GPS capture
   const [gName, setGName] = useState('');
   const [gAccuracy, setGAccuracy] = useState('');
+  const [gClassTime, setGClassTime] = useState('');
   const [corners, setCorners] = useState<Array<{ lat: string; lon: string }>>([
     { lat: '', lon: '' },
     { lat: '', lon: '' },
@@ -71,12 +72,14 @@ const AdminDashboard = () => {
       radiusMeters: 0,
       corners: parsedCorners,
       accuracyMeters: !isNaN(accuracyVal) && accuracyVal > 0 ? accuracyVal : undefined,
+      classStartTime: gClassTime || undefined,
       createdBy: user!.id,
       isActive: true,
     });
     setGeofences([...geofences, g]);
     setGName('');
     setGAccuracy('');
+    setGClassTime('');
     setCorners([{ lat: '', lon: '' }, { lat: '', lon: '' }, { lat: '', lon: '' }, { lat: '', lon: '' }]);
     toast({ title: 'Geofence created', description: g.name });
   };
@@ -97,10 +100,11 @@ const AdminDashboard = () => {
 
   const formatCorners = (g: Geofence) => {
     const accuracy = g.accuracyMeters ? ` · ≤${g.accuracyMeters}m` : '';
+    const timing = g.classStartTime ? ` · 🕐${g.classStartTime}` : '';
     if (g.corners && g.corners.length === 4) {
-      return g.corners.map((c, i) => `C${i + 1}(${c.latitude.toFixed(4)}, ${c.longitude.toFixed(4)})`).join(' · ') + accuracy;
+      return g.corners.map((c, i) => `C${i + 1}(${c.latitude.toFixed(4)}, ${c.longitude.toFixed(4)})`).join(' · ') + accuracy + timing;
     }
-    return `${g.latitude.toFixed(4)}, ${g.longitude.toFixed(4)} · ${g.radiusMeters}m` + accuracy;
+    return `${g.latitude.toFixed(4)}, ${g.longitude.toFixed(4)} · ${g.radiusMeters}m` + accuracy + timing;
   };
 
   const cornerLabels = ['Front-Left', 'Front-Right', 'Back-Right', 'Back-Left'];
@@ -177,6 +181,17 @@ const AdminDashboard = () => {
                       step="1"
                       value={gAccuracy}
                       onChange={e => setGAccuracy(e.target.value)}
+                      className="bg-secondary/40 border-border/50 h-9 text-sm"
+                    />
+                  </div>
+
+                  <div className="rounded-xl border border-border/30 bg-secondary/20 p-3 space-y-1.5">
+                    <p className="text-xs font-medium text-muted-foreground">Class Start Time</p>
+                    <p className="text-[10px] text-muted-foreground/70">Students must check in within 5 minutes of this time. Leave empty for no time restriction.</p>
+                    <Input
+                      type="time"
+                      value={gClassTime}
+                      onChange={e => setGClassTime(e.target.value)}
                       className="bg-secondary/40 border-border/50 h-9 text-sm"
                     />
                   </div>
