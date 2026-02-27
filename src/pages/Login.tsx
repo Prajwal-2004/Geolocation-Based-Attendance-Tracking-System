@@ -90,10 +90,7 @@ const Login = () => {
             </button>
           </div>
 
-          <div className="mt-6 rounded-lg bg-primary/5 border border-primary/10 p-3.5 text-xs text-muted-foreground">
-            <p className="font-semibold text-primary mb-1.5 text-xs uppercase tracking-wider">Demo Admin</p>
-            <p>admin@geoattend.com · admin123</p>
-          </div>
+          
         </CardContent>
       </Card>
     </div>
