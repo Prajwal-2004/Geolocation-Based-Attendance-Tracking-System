@@ -25,7 +25,7 @@ const Register = () => {
     e.preventDefault();
     try {
       const user = register(
-        { email, name, role, department, studentId: role === 'student' ? studentId : undefined },
+        { email, name, role, department, studentId: role === 'student' ? studentId : undefined, phoneNumber: phoneNumber || undefined },
         password
       );
       toast({ title: 'Account created!', description: `Welcome, ${user.name}` });
