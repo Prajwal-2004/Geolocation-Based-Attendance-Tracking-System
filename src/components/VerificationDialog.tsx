@@ -1,10 +1,10 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Fingerprint, MessageSquare, Loader2, CheckCircle2, XCircle, ShieldCheck } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
-import { isWebAuthnSupported, verifyBiometric, hasBiometricRegistered, registerBiometric } from '@/lib/webauthn';
+import { isWebAuthnSupported, verifyBiometric, hasBiometricRegistered } from '@/lib/webauthn';
 
 interface VerificationDialogProps {
   open: boolean;
@@ -14,16 +14,26 @@ interface VerificationDialogProps {
 
 const VerificationDialog = ({ open, onClose, onVerified }: VerificationDialogProps) => {
   const { user } = useAuth();
-  const [mode, setMode] = useState<'choose' | 'fingerprint' | 'otp'>('choose');
+  const [mode, setMode] = useState<'fingerprint' | 'otp'>('fingerprint');
   const [isLoading, setIsLoading] = useState(false);
   const [otpSent, setOtpSent] = useState(false);
   const [otpCode, setOtpCode] = useState('');
   const [generatedOtp, setGeneratedOtp] = useState('');
   const [error, setError] = useState('');
-  const [needsRegister, setNeedsRegister] = useState(false);
 
   const hasFingerprint = user ? hasBiometricRegistered(user.id) : false;
   const webauthnSupported = isWebAuthnSupported();
+
+  // Default to fingerprint if registered, otherwise OTP
+  useEffect(() => {
+    if (open) {
+      if (hasFingerprint && webauthnSupported) {
+        setMode('fingerprint');
+      } else {
+        setMode('otp');
+      }
+    }
+  }, [open, hasFingerprint, webauthnSupported]);
 
   const handleFingerprint = async () => {
     if (!user) return;
@@ -31,37 +41,11 @@ const VerificationDialog = ({ open, onClose, onVerified }: VerificationDialogPro
     setError('');
 
     try {
-      if (!hasFingerprint) {
-        setNeedsRegister(true);
-        setIsLoading(false);
-        return;
-      }
-
       const verified = await verifyBiometric(user.id);
       if (verified) {
         onVerified();
       } else {
-        setError('Fingerprint verification failed. Please try again.');
-      }
-    } catch (err: any) {
-      setError(err.message);
-    }
-    setIsLoading(false);
-  };
-
-  const handleRegisterFingerprint = async () => {
-    if (!user) return;
-    setIsLoading(true);
-    setError('');
-
-    try {
-      await registerBiometric(user.id, user.name);
-      // After registration, verify immediately
-      const verified = await verifyBiometric(user.id);
-      if (verified) {
-        onVerified();
-      } else {
-        setError('Registration succeeded but verification failed. Try again.');
+        setError('Fingerprint verification failed. Try again or use OTP.');
       }
     } catch (err: any) {
       setError(err.message);
@@ -77,14 +61,12 @@ const VerificationDialog = ({ open, onClose, onVerified }: VerificationDialogPro
     setIsLoading(true);
     setError('');
 
-    // Simulate OTP send (in production, this would use an edge function + SMS provider)
     const otp = Math.floor(100000 + Math.random() * 900000).toString();
     setGeneratedOtp(otp);
 
     setTimeout(() => {
       setOtpSent(true);
       setIsLoading(false);
-      // In dev/demo mode, show the OTP in console
       console.log(`[DEV] OTP for ${user.phoneNumber}: ${otp}`);
     }, 1500);
   };
@@ -99,13 +81,12 @@ const VerificationDialog = ({ open, onClose, onVerified }: VerificationDialogPro
   };
 
   const resetState = () => {
-    setMode('choose');
+    setMode(hasFingerprint && webauthnSupported ? 'fingerprint' : 'otp');
     setIsLoading(false);
     setOtpSent(false);
     setOtpCode('');
     setGeneratedOtp('');
     setError('');
-    setNeedsRegister(false);
   };
 
   return (
@@ -128,44 +109,7 @@ const VerificationDialog = ({ open, onClose, onVerified }: VerificationDialogPro
           </div>
         )}
 
-        {mode === 'choose' && (
-          <div className="space-y-3 pt-2">
-            {webauthnSupported && (
-              <Button
-                variant="outline"
-                className="w-full h-14 justify-start gap-4 rounded-xl border-border/50 hover:border-primary/50 hover:bg-primary/5"
-                onClick={() => { setMode('fingerprint'); setError(''); }}
-              >
-                <div className="h-10 w-10 rounded-xl bg-primary/10 flex items-center justify-center shrink-0">
-                  <Fingerprint className="h-5 w-5 text-primary" />
-                </div>
-                <div className="text-left">
-                  <p className="font-semibold text-sm">Fingerprint / Biometric</p>
-                  <p className="text-xs text-muted-foreground">Use your device's biometric sensor</p>
-                </div>
-              </Button>
-            )}
-            <Button
-              variant="outline"
-              className="w-full h-14 justify-start gap-4 rounded-xl border-border/50 hover:border-primary/50 hover:bg-primary/5"
-              onClick={() => { setMode('otp'); setError(''); }}
-            >
-              <div className="h-10 w-10 rounded-xl bg-accent/10 flex items-center justify-center shrink-0">
-                <MessageSquare className="h-5 w-5 text-accent" />
-              </div>
-              <div className="text-left">
-                <p className="font-semibold text-sm">OTP via SMS</p>
-                <p className="text-xs text-muted-foreground">
-                  {user?.phoneNumber
-                    ? `Send code to ***${user.phoneNumber.slice(-4)}`
-                    : 'No phone number registered'}
-                </p>
-              </div>
-            </Button>
-          </div>
-        )}
-
-        {mode === 'fingerprint' && !needsRegister && (
+        {mode === 'fingerprint' && (
           <div className="space-y-4 pt-2 text-center">
             <div className="mx-auto w-20 h-20 rounded-full bg-primary/10 flex items-center justify-center border-2 border-primary/20">
               {isLoading ? (
@@ -175,41 +119,19 @@ const VerificationDialog = ({ open, onClose, onVerified }: VerificationDialogPro
               )}
             </div>
             <p className="text-sm text-muted-foreground">
-              {hasFingerprint
-                ? 'Place your finger on the sensor to verify'
-                : 'No fingerprint registered yet'}
+              Place your finger on the sensor to verify your identity
             </p>
-            <div className="flex gap-2">
-              <Button variant="outline" className="flex-1 rounded-xl" onClick={() => { setMode('choose'); setError(''); }}>
-                Back
-              </Button>
-              <Button className="flex-1 rounded-xl" onClick={handleFingerprint} disabled={isLoading}>
-                {isLoading ? 'Verifying...' : hasFingerprint ? 'Verify' : 'Register'}
-              </Button>
-            </div>
-          </div>
-        )}
-
-        {mode === 'fingerprint' && needsRegister && (
-          <div className="space-y-4 pt-2 text-center">
-            <div className="mx-auto w-20 h-20 rounded-full bg-warning/10 flex items-center justify-center border-2 border-warning/20">
-              <Fingerprint className="h-8 w-8 text-warning" />
-            </div>
-            <div>
-              <p className="font-semibold text-sm">Register Your Fingerprint</p>
-              <p className="text-xs text-muted-foreground mt-1">
-                You'll register ONE fingerprint. This cannot be changed later to prevent proxy attendance.
-              </p>
-            </div>
-            <div className="flex gap-2">
-              <Button variant="outline" className="flex-1 rounded-xl" onClick={() => { setNeedsRegister(false); setMode('choose'); }}>
-                Cancel
-              </Button>
-              <Button className="flex-1 rounded-xl" onClick={handleRegisterFingerprint} disabled={isLoading}>
-                {isLoading ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
-                Register & Verify
-              </Button>
-            </div>
+            <Button className="w-full rounded-xl" onClick={handleFingerprint} disabled={isLoading}>
+              {isLoading ? 'Verifying...' : 'Verify Fingerprint'}
+            </Button>
+            <Button
+              variant="ghost"
+              className="w-full text-muted-foreground hover:text-foreground rounded-xl text-sm"
+              onClick={() => { setMode('otp'); setError(''); }}
+            >
+              <MessageSquare className="mr-2 h-4 w-4" />
+              Having trouble? Use OTP instead
+            </Button>
           </div>
         )}
 
@@ -228,9 +150,11 @@ const VerificationDialog = ({ open, onClose, onVerified }: VerificationDialogPro
                   </p>
                 </div>
                 <div className="flex gap-2">
-                  <Button variant="outline" className="flex-1 rounded-xl" onClick={() => { setMode('choose'); setError(''); }}>
-                    Back
-                  </Button>
+                  {hasFingerprint && webauthnSupported && (
+                    <Button variant="outline" className="flex-1 rounded-xl" onClick={() => { setMode('fingerprint'); setError(''); }}>
+                      Back
+                    </Button>
+                  )}
                   <Button
                     className="flex-1 rounded-xl"
                     onClick={handleSendOtp}
@@ -244,12 +168,12 @@ const VerificationDialog = ({ open, onClose, onVerified }: VerificationDialogPro
             ) : (
               <>
                 <div className="text-center">
-                  <CheckCircle2 className="h-8 w-8 text-success mx-auto mb-2" />
+                  <CheckCircle2 className="h-8 w-8 text-primary mx-auto mb-2" />
                   <p className="text-sm font-medium">OTP Sent!</p>
                   <p className="text-xs text-muted-foreground mt-1">
                     Enter the 6-digit code sent to ***{user?.phoneNumber?.slice(-4)}
                   </p>
-                  <p className="text-xs text-warning mt-2 font-medium">
+                  <p className="text-xs text-amber-500 mt-2 font-medium">
                     Demo mode: Check browser console for OTP
                   </p>
                 </div>
