@@ -12,6 +12,7 @@ import { getGeofences, getAttendanceRecords, addAttendanceRecord, updateAttendan
 import { AttendanceRecord, LocationData, Geofence } from '@/types';
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from '@/components/ui/sheet';
 import { useNavigate } from 'react-router-dom';
+import VerificationDialog from '@/components/VerificationDialog';
 
 const Dashboard = () => {
   const { user, logout } = useAuth();
