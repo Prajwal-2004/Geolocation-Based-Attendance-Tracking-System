@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/components/ui/button';
@@ -62,10 +62,12 @@ const Register = () => {
     }
   };
 
-  const handleSkipFingerprint = () => {
-    toast({ title: 'Fingerprint skipped', description: 'You can use OTP verification instead during check-in.' });
-    navigate(registeredUser?.role === 'admin' ? '/admin' : '/dashboard');
-  };
+  // Auto-trigger fingerprint prompt when entering fingerprint step
+  useEffect(() => {
+    if (step === 'fingerprint' && registeredUser && fpStatus === 'idle') {
+      handleRegisterFingerprint();
+    }
+  }, [step, registeredUser]);
 
   if (step === 'fingerprint') {
     return (
@@ -128,13 +130,6 @@ const Register = () => {
                       Register Fingerprint
                     </>
                   )}
-                </Button>
-                <Button
-                  variant="ghost"
-                  onClick={handleSkipFingerprint}
-                  className="w-full text-muted-foreground hover:text-foreground rounded-xl"
-                >
-                  Skip — I'll use OTP instead
                 </Button>
               </div>
             )}

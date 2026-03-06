@@ -24,7 +24,7 @@ const VerificationDialog = ({ open, onClose, onVerified }: VerificationDialogPro
   const hasFingerprint = user ? hasBiometricRegistered(user.id) : false;
   const webauthnSupported = isWebAuthnSupported();
 
-  // Default to fingerprint if registered, otherwise OTP
+  // Default to fingerprint if registered, otherwise OTP; auto-trigger fingerprint
   useEffect(() => {
     if (open) {
       if (hasFingerprint && webauthnSupported) {
@@ -34,6 +34,13 @@ const VerificationDialog = ({ open, onClose, onVerified }: VerificationDialogPro
       }
     }
   }, [open, hasFingerprint, webauthnSupported]);
+
+  // Auto-trigger fingerprint verification when dialog opens in fingerprint mode
+  useEffect(() => {
+    if (open && mode === 'fingerprint' && hasFingerprint && !isLoading) {
+      handleFingerprint();
+    }
+  }, [open, mode]);
 
   const handleFingerprint = async () => {
     if (!user) return;
