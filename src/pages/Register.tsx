@@ -131,13 +131,6 @@ const Register = () => {
                     </>
                   )}
                 </Button>
-                <Button
-                  variant="ghost"
-                  onClick={handleSkipFingerprint}
-                  className="w-full text-muted-foreground hover:text-foreground rounded-xl"
-                >
-                  Skip — I'll use OTP instead
-                </Button>
               </div>
             )}
           </CardContent>
