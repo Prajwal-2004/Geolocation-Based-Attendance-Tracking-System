@@ -29,6 +29,8 @@ const Dashboard = () => {
 
   const isAdmin = user?.role === 'admin';
   const activeCheckIn = records.find(r => r.status === 'valid' && !r.checkOutTime);
+  const [showVerification, setShowVerification] = useState(false);
+  const [pendingCheckIn, setPendingCheckIn] = useState(false);
 
   const handleCaptureLocation = async () => {
     setIsCapturing(true);
