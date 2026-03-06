@@ -16,6 +16,7 @@ const Register = () => {
   const [role, setRole] = useState<UserRole>('student');
   const [department, setDepartment] = useState('');
   const [studentId, setStudentId] = useState('');
+  const [phoneNumber, setPhoneNumber] = useState('');
   const { register } = useAuth();
   const navigate = useNavigate();
   const { toast } = useToast();
