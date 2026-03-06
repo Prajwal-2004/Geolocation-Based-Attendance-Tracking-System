@@ -382,6 +382,12 @@ const Dashboard = () => {
           </div>
         </div>
       </main>
+
+      <VerificationDialog
+        open={showVerification}
+        onClose={() => { setShowVerification(false); setPendingCheckIn(false); }}
+        onVerified={completeCheckIn}
+      />
     </div>
   );
 };
