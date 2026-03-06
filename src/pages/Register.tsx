@@ -37,9 +37,15 @@ const Register = () => {
       toast({ title: 'Account created!', description: `Welcome, ${user.name}` });
 
       // If student and WebAuthn supported, go to fingerprint step
-      if (user.role === 'student' && isWebAuthnSupported()) {
+      const webauthnAvailable = isWebAuthnSupported();
+      console.log('[GeoAttend] WebAuthn supported:', webauthnAvailable);
+      console.log('[GeoAttend] PublicKeyCredential:', !!window.PublicKeyCredential);
+      console.log('[GeoAttend] User role:', user.role);
+      if (user.role === 'student' && webauthnAvailable) {
+        console.log('[GeoAttend] Moving to fingerprint step');
         setStep('fingerprint');
       } else {
+        console.log('[GeoAttend] Skipping fingerprint, navigating to dashboard');
         navigate(user.role === 'admin' ? '/admin' : '/dashboard');
       }
     } catch (err: any) {
