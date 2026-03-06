@@ -9,7 +9,6 @@ export interface User {
   studentId?: string;
   phoneNumber?: string;
   createdAt: string;
-  createdAt: string;
 }
 
 export interface PolygonPoint {
