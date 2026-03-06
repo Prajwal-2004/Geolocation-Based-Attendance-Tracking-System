@@ -7,6 +7,9 @@ export interface User {
   role: UserRole;
   department?: string;
   studentId?: string;
+  phoneNumber?: string;
+  /** WebAuthn credential ID — only one allowed per user */
+  webauthnCredentialId?: string;
   createdAt: string;
 }
 
