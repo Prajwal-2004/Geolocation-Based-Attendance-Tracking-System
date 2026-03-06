@@ -153,7 +153,6 @@ const Dashboard = () => {
     setShowVerification(false);
     toast({ title: 'Checked in!', description: `${geofence.name} — Identity verified & location confirmed` });
   };
-  };
 
   const handleCheckOut = async () => {
     if (!activeCheckIn) return;
