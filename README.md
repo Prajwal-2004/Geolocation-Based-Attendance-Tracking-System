@@ -40,7 +40,7 @@ A mobile-first attendance tracking application that uses real-time GPS coordinat
 | File | Purpose |
 |------|---------|
 | `src/lib/storage.ts` | **Backend & Database Module** — Manages all data persistence via localStorage. Provides CRUD operations for users, geofences, attendance records, and anomalies. Handles user registration and login with base64 password encoding. Seeds a default admin account on first run. |
-| `src/lib/geofence.ts` | **Location & Geofence Validation Module** — Implements the **Haversine formula** for distance calculation, `validateLocation()` with support for both polygon and circular geofences, `validateTimestamp()` and `checkGpsAccuracy()` for anti-spoofing, and `getCurrentLocation()` wrapper for the browser Geolocation API. |
+| `src/lib/geofence.ts` | **Location & Geofence Validation Module** — Implements the **Haversine formula** for distance calculation, the **Ray Casting algorithm** for polygon-based boundary checking, `validateLocation()` with support for both polygon and circular geofences, `validateTimestamp()` and `checkGpsAccuracy()` for anti-spoofing, and `getCurrentLocation()` wrapper for the browser Geolocation API. |
 
 ### Authentication
 
