@@ -12,6 +12,7 @@ import { getGeofences, getAttendanceRecords, addAttendanceRecord, updateAttendan
 import { AttendanceRecord, LocationData, Geofence } from '@/types';
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from '@/components/ui/sheet';
 import { useNavigate } from 'react-router-dom';
+import VerificationDialog from '@/components/VerificationDialog';
 
 const Dashboard = () => {
   const { user, logout } = useAuth();
@@ -28,6 +29,8 @@ const Dashboard = () => {
 
   const isAdmin = user?.role === 'admin';
   const activeCheckIn = records.find(r => r.status === 'valid' && !r.checkOutTime);
+  const [showVerification, setShowVerification] = useState(false);
+  const [pendingCheckIn, setPendingCheckIn] = useState(false);
 
   const handleCaptureLocation = async () => {
     setIsCapturing(true);
@@ -79,7 +82,6 @@ const Dashboard = () => {
         const classStart = new Date(now);
         classStart.setHours(startH, startM, 0, 0);
         const diffMin = (now.getTime() - classStart.getTime()) / 60000;
-        // Student can check in from class start time up to 5 minutes after
         if (diffMin < 0 || diffMin > 5) {
           const timeStr = geofence.classStartTime;
           const reason = diffMin < 0
@@ -105,17 +107,10 @@ const Dashboard = () => {
 
       const result = validateLocation(location, geofence);
       if (result.isValid) {
-        const record = addAttendanceRecord({
-          userId: user.id, userName: user.name, userRole: user.role,
-          geofenceId: geofence.id, geofenceName: geofence.name,
-          checkInTime: new Date().toISOString(),
-          latitude: location.latitude, longitude: location.longitude,
-          distanceFromCenter: result.distance, status: 'valid',
-        });
-        setRecords([record, ...records]);
-        setCapturedLocation(null);
-        setSelectedGeofenceId('');
-        toast({ title: 'Checked in!', description: `${geofence.name} — ${result.distance}m from center (accurate up to ${Math.round(capturedLocation.accuracy)}m)` });
+        // Location valid → show identity verification before completing check-in
+        setPendingCheckIn(true);
+        setShowVerification(true);
+        setIsLoading(false);
       } else {
         const reason = `Outside ${geofence.name} boundary (${result.distance}m from center, max ${result.maxDistance}m, accurate up to ${Math.round(location.accuracy)}m)`;
         addAttendanceRecord({
@@ -130,11 +125,33 @@ const Dashboard = () => {
         setCapturedLocation(null);
         setSelectedGeofenceId('');
         toast({ title: 'Check-in rejected', description: `You are outside the ${geofence.name} boundary.`, variant: 'destructive' });
+        setIsLoading(false);
       }
     } catch (err: any) {
       toast({ title: 'Error', description: err.message, variant: 'destructive' });
+      setIsLoading(false);
     }
-    setIsLoading(false);
+  };
+
+  const completeCheckIn = () => {
+    if (!user || !capturedLocation || !selectedGeofenceId) return;
+    const geofence = activeGeofences.find(g => g.id === selectedGeofenceId);
+    if (!geofence) return;
+    const location = capturedLocation;
+    const result = validateLocation(location, geofence);
+    const record = addAttendanceRecord({
+      userId: user.id, userName: user.name, userRole: user.role,
+      geofenceId: geofence.id, geofenceName: geofence.name,
+      checkInTime: new Date().toISOString(),
+      latitude: location.latitude, longitude: location.longitude,
+      distanceFromCenter: result.distance, status: 'valid',
+    });
+    setRecords([record, ...records]);
+    setCapturedLocation(null);
+    setSelectedGeofenceId('');
+    setPendingCheckIn(false);
+    setShowVerification(false);
+    toast({ title: 'Checked in!', description: `${geofence.name} — Identity verified & location confirmed` });
   };
 
   const handleCheckOut = async () => {
@@ -364,6 +381,12 @@ const Dashboard = () => {
           </div>
         </div>
       </main>
+
+      <VerificationDialog
+        open={showVerification}
+        onClose={() => { setShowVerification(false); setPendingCheckIn(false); }}
+        onVerified={completeCheckIn}
+      />
     </div>
   );
 };

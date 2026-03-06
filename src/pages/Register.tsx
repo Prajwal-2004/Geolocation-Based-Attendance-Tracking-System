@@ -16,6 +16,7 @@ const Register = () => {
   const [role, setRole] = useState<UserRole>('student');
   const [department, setDepartment] = useState('');
   const [studentId, setStudentId] = useState('');
+  const [phoneNumber, setPhoneNumber] = useState('');
   const { register } = useAuth();
   const navigate = useNavigate();
   const { toast } = useToast();
@@ -24,7 +25,7 @@ const Register = () => {
     e.preventDefault();
     try {
       const user = register(
-        { email, name, role, department, studentId: role === 'student' ? studentId : undefined },
+        { email, name, role, department, studentId: role === 'student' ? studentId : undefined, phoneNumber: phoneNumber || undefined },
         password
       );
       toast({ title: 'Account created!', description: `Welcome, ${user.name}` });
@@ -88,6 +89,18 @@ const Register = () => {
                 <Input value={studentId} onChange={e => setStudentId(e.target.value)} className="bg-secondary/40 border-border/50 h-11" placeholder="STU-001" />
               </div>
             )}
+            <div className="space-y-1.5">
+              <label className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Phone Number</label>
+              <Input 
+                type="tel" 
+                value={phoneNumber} 
+                onChange={e => setPhoneNumber(e.target.value)} 
+                required 
+                className="bg-secondary/40 border-border/50 h-11" 
+                placeholder="+1234567890" 
+              />
+              <p className="text-[10px] text-muted-foreground">Required for OTP verification during check-in</p>
+            </div>
             <Button type="submit" className="w-full h-11 font-semibold text-sm tracking-wide shadow-lg shadow-primary/20">
               Create Account
             </Button>
