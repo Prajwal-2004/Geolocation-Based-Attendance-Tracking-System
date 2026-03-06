@@ -62,10 +62,12 @@ const Register = () => {
     }
   };
 
-  const handleSkipFingerprint = () => {
-    toast({ title: 'Fingerprint skipped', description: 'You can use OTP verification instead during check-in.' });
-    navigate(registeredUser?.role === 'admin' ? '/admin' : '/dashboard');
-  };
+  // Auto-trigger fingerprint prompt when entering fingerprint step
+  useEffect(() => {
+    if (step === 'fingerprint' && registeredUser && fpStatus === 'idle') {
+      handleRegisterFingerprint();
+    }
+  }, [step, registeredUser]);
 
   if (step === 'fingerprint') {
     return (
