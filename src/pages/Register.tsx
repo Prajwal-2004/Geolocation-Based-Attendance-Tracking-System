@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/components/ui/button';
@@ -36,16 +36,16 @@ const Register = () => {
       setRegisteredUser(user);
       toast({ title: 'Account created!', description: `Welcome, ${user.name}` });
 
-      // If student and WebAuthn supported, go to fingerprint step
+      // If student and WebAuthn supported, go to fingerprint step and auto-trigger
       const webauthnAvailable = isWebAuthnSupported();
       console.log('[GeoAttend] WebAuthn supported:', webauthnAvailable);
-      console.log('[GeoAttend] PublicKeyCredential:', !!window.PublicKeyCredential);
       console.log('[GeoAttend] User role:', user.role);
       if (user.role === 'student' && webauthnAvailable) {
-        console.log('[GeoAttend] Moving to fingerprint step');
+        console.log('[GeoAttend] Moving to fingerprint step & auto-triggering');
         setStep('fingerprint');
+        // Directly trigger with user object to avoid stale closure
+        setTimeout(() => handleRegisterFingerprint(user), 100);
       } else {
-        console.log('[GeoAttend] Skipping fingerprint, navigating to dashboard');
         navigate(user.role === 'admin' ? '/admin' : '/dashboard');
       }
     } catch (err: any) {
@@ -53,29 +53,26 @@ const Register = () => {
     }
   };
 
-  const handleRegisterFingerprint = async () => {
-    if (!registeredUser) return;
+  const handleRegisterFingerprint = useCallback(async (userOverride?: any) => {
+    const targetUser = userOverride || registeredUser;
+    if (!targetUser) {
+      console.log('[GeoAttend] No user available for fingerprint registration');
+      return;
+    }
     setFpStatus('loading');
     setFpError('');
     try {
-      await registerBiometric(registeredUser.id, registeredUser.name);
+      console.log('[GeoAttend] Calling registerBiometric for:', targetUser.name);
+      await registerBiometric(targetUser.id, targetUser.name);
       setFpStatus('success');
       toast({ title: 'Fingerprint registered!', description: 'You can now use biometric verification for check-in.' });
       setTimeout(() => navigate('/dashboard'), 1500);
     } catch (err: any) {
+      console.log('[GeoAttend] Fingerprint registration error:', err.message);
       setFpStatus('error');
       setFpError(err.message);
     }
-  };
-
-  // Auto-trigger fingerprint prompt when entering fingerprint step
-  useEffect(() => {
-    console.log('[GeoAttend] Fingerprint useEffect:', { step, hasUser: !!registeredUser, fpStatus });
-    if (step === 'fingerprint' && registeredUser && fpStatus === 'idle') {
-      console.log('[GeoAttend] Auto-triggering fingerprint registration...');
-      handleRegisterFingerprint();
-    }
-  }, [step, registeredUser]);
+  }, [registeredUser, navigate, toast]);
 
   if (step === 'fingerprint') {
     return (
