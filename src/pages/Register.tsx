@@ -5,9 +5,10 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Fingerprint } from 'lucide-react';
+import { Fingerprint, Loader2, CheckCircle2, AlertTriangle } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { UserRole } from '@/types';
+import { isWebAuthnSupported, registerBiometric } from '@/lib/webauthn';
 
 const Register = () => {
   const [name, setName] = useState('');
@@ -17,6 +18,10 @@ const Register = () => {
   const [department, setDepartment] = useState('');
   const [studentId, setStudentId] = useState('');
   const [phoneNumber, setPhoneNumber] = useState('');
+  const [step, setStep] = useState<'form' | 'fingerprint'>('form');
+  const [registeredUser, setRegisteredUser] = useState<any>(null);
+  const [fpStatus, setFpStatus] = useState<'idle' | 'loading' | 'success' | 'error'>('idle');
+  const [fpError, setFpError] = useState('');
   const { register } = useAuth();
   const navigate = useNavigate();
   const { toast } = useToast();
@@ -28,12 +33,116 @@ const Register = () => {
         { email, name, role, department, studentId: role === 'student' ? studentId : undefined, phoneNumber: phoneNumber || undefined },
         password
       );
+      setRegisteredUser(user);
       toast({ title: 'Account created!', description: `Welcome, ${user.name}` });
-      navigate(user.role === 'admin' ? '/admin' : '/dashboard');
+
+      // If student and WebAuthn supported, go to fingerprint step
+      if (user.role === 'student' && isWebAuthnSupported()) {
+        setStep('fingerprint');
+      } else {
+        navigate(user.role === 'admin' ? '/admin' : '/dashboard');
+      }
     } catch (err: any) {
       toast({ title: 'Registration failed', description: err.message, variant: 'destructive' });
     }
   };
+
+  const handleRegisterFingerprint = async () => {
+    if (!registeredUser) return;
+    setFpStatus('loading');
+    setFpError('');
+    try {
+      await registerBiometric(registeredUser.id, registeredUser.name);
+      setFpStatus('success');
+      toast({ title: 'Fingerprint registered!', description: 'You can now use biometric verification for check-in.' });
+      setTimeout(() => navigate('/dashboard'), 1500);
+    } catch (err: any) {
+      setFpStatus('error');
+      setFpError(err.message);
+    }
+  };
+
+  const handleSkipFingerprint = () => {
+    toast({ title: 'Fingerprint skipped', description: 'You can use OTP verification instead during check-in.' });
+    navigate(registeredUser?.role === 'admin' ? '/admin' : '/dashboard');
+  };
+
+  if (step === 'fingerprint') {
+    return (
+      <div className="flex min-h-screen items-center justify-center p-4 relative overflow-hidden">
+        <div className="absolute top-0 right-0 w-96 h-96 bg-primary/5 rounded-full blur-3xl translate-x-1/2 -translate-y-1/2" />
+        <div className="absolute bottom-0 left-0 w-96 h-96 bg-primary/5 rounded-full blur-3xl -translate-x-1/2 translate-y-1/2" />
+
+        <Card className="w-full max-w-md border-border/30 bg-card/60 backdrop-blur-xl shadow-2xl relative z-10">
+          <CardContent className="p-8 text-center space-y-6">
+            <div className="mx-auto flex h-20 w-20 items-center justify-center rounded-full border-2 border-primary/20 bg-primary/10 shadow-lg shadow-primary/10">
+              {fpStatus === 'loading' ? (
+                <Loader2 className="h-10 w-10 text-primary animate-spin" />
+              ) : fpStatus === 'success' ? (
+                <CheckCircle2 className="h-10 w-10 text-primary" />
+              ) : fpStatus === 'error' ? (
+                <AlertTriangle className="h-10 w-10 text-destructive" />
+              ) : (
+                <Fingerprint className="h-10 w-10 text-primary" />
+              )}
+            </div>
+
+            <div>
+              <h1 className="text-2xl font-bold tracking-tight">
+                {fpStatus === 'success' ? 'Fingerprint Registered!' : 'Register Your Fingerprint'}
+              </h1>
+              <p className="text-sm text-muted-foreground mt-2">
+                {fpStatus === 'success'
+                  ? 'Your biometric identity has been saved. Redirecting...'
+                  : 'Register your fingerprint now for quick identity verification during check-in. Only ONE fingerprint is allowed per account.'}
+              </p>
+            </div>
+
+            {fpError && (
+              <div className="rounded-xl bg-destructive/10 border border-destructive/20 p-3 text-sm text-destructive text-left">
+                {fpError}
+              </div>
+            )}
+
+            {fpStatus !== 'success' && (
+              <div className="space-y-3">
+                <Button
+                  onClick={handleRegisterFingerprint}
+                  disabled={fpStatus === 'loading'}
+                  className="w-full h-12 font-semibold rounded-xl shadow-lg shadow-primary/20"
+                  size="lg"
+                >
+                  {fpStatus === 'loading' ? (
+                    <>
+                      <Loader2 className="mr-2 h-5 w-5 animate-spin" />
+                      Registering...
+                    </>
+                  ) : fpStatus === 'error' ? (
+                    <>
+                      <Fingerprint className="mr-2 h-5 w-5" />
+                      Try Again
+                    </>
+                  ) : (
+                    <>
+                      <Fingerprint className="mr-2 h-5 w-5" />
+                      Register Fingerprint
+                    </>
+                  )}
+                </Button>
+                <Button
+                  variant="ghost"
+                  onClick={handleSkipFingerprint}
+                  className="w-full text-muted-foreground hover:text-foreground rounded-xl"
+                >
+                  Skip — I'll use OTP instead
+                </Button>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
 
   return (
     <div className="flex min-h-screen items-center justify-center p-4 relative overflow-hidden">
