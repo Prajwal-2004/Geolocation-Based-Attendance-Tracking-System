@@ -70,7 +70,9 @@ const Register = () => {
 
   // Auto-trigger fingerprint prompt when entering fingerprint step
   useEffect(() => {
+    console.log('[GeoAttend] Fingerprint useEffect:', { step, hasUser: !!registeredUser, fpStatus });
     if (step === 'fingerprint' && registeredUser && fpStatus === 'idle') {
+      console.log('[GeoAttend] Auto-triggering fingerprint registration...');
       handleRegisterFingerprint();
     }
   }, [step, registeredUser]);
