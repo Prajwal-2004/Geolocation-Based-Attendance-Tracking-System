@@ -1,6 +1,6 @@
 # GeoAttend — Geolocation-Based Attendance Tracking System
 
-A mobile-first attendance tracking application that uses real-time GPS coordinates and polygon-based geofencing to verify user presence before logging attendance. Built with React, TypeScript, and Tailwind CSS, designed to run as a native mobile app via Capacitor.
+A mobile-first attendance tracking application that uses real-time GPS coordinates, polygon-based geofencing, and **multi-factor identity verification** (fingerprint + OTP) to prevent proxy attendance. Built with React, TypeScript, and Tailwind CSS.
 
 ---
 
@@ -9,13 +9,41 @@ A mobile-first attendance tracking application that uses real-time GPS coordinat
 - **Role-based authentication** (Student, Faculty, Admin)
 - **GPS-based check-in/check-out** with real-time location capture
 - **4-corner polygon geofencing** — admin defines classroom boundaries using 4 coordinate points
-- **Ray Casting algorithm** for point-in-polygon validation
 - **Haversine formula** for distance calculation and reporting
+- **Multi-factor identity verification** — fingerprint (WebAuthn) or OTP after geofence validation
+- **One fingerprint limit per student** — prevents proxy attendance via biometric sharing
+- **Phone number registration** — required for OTP verification
 - **Anti-spoofing measures** — timestamp consistency checks, GPS accuracy validation
 - **Admin dashboard** — geofence configuration, attendance records, anomaly reports, user management
 - **Duplicate prevention** — prevents multiple active check-ins
 - **Anomaly logging** — flags suspicious activity for admin review
-- **Offline-capable** — all data stored locally via localStorage
+- **Lovable Cloud backend** — database, authentication, edge functions
+
+---
+
+## 🔐 Identity Verification System
+
+### How It Works
+
+When a student is **inside the geofence** and clicks "Check In", a **verification popup** appears with two options:
+
+#### Option 1: Fingerprint / Biometric (WebAuthn)
+- Uses the device's built-in fingerprint sensor or Face ID via the **Web Authentication API (FIDO2)**
+- **Limited to ONE fingerprint per student** — once registered, no additional biometrics can be added
+- First-time users are prompted to register their fingerprint; subsequent check-ins verify against it
+- Prevents proxy attendance by binding identity to a physical device biometric
+- Works entirely client-side via the platform authenticator (TPM/Secure Enclave)
+
+#### Option 2: OTP via SMS
+- Sends a **6-digit one-time password** to the student's registered phone number
+- Phone number is **required during registration**
+- *Currently in demo mode* — OTP is logged to browser console (production would use an SMS provider via Lovable Cloud edge functions)
+
+### Why One Fingerprint?
+Students cannot register multiple fingerprints to prevent:
+- Sharing biometric credentials with friends for proxy attendance
+- Adding a friend's fingerprint to their account
+- The credential is bound to the physical device's secure hardware
 
 ---
 
@@ -33,67 +61,128 @@ A mobile-first attendance tracking application that uses real-time GPS coordinat
 
 | File | Purpose |
 |------|---------|
-| `src/types/index.ts` | TypeScript type definitions for `User`, `Geofence` (with `PolygonPoint[]` corners), `AttendanceRecord`, `LocationData`, and `AnomalyLog`. Central schema for all data structures. |
+| `src/types/index.ts` | TypeScript type definitions for `User` (with `phoneNumber` and `webauthnCredentialId`), `Geofence` (with `PolygonPoint[]` corners), `AttendanceRecord`, `LocationData`, and `AnomalyLog`. |
 
 ### Core Logic (Business Logic Layer)
 
 | File | Purpose |
 |------|---------|
-| `src/lib/storage.ts` | **Backend & Database Module** — Manages all data persistence via localStorage. Provides CRUD operations for users, geofences, attendance records, and anomalies. Handles user registration and login with base64 password encoding. Seeds a default admin account on first run. |
-| `src/lib/geofence.ts` | **Location & Geofence Validation Module** — Implements the **Haversine formula** for distance calculation, the **Ray Casting algorithm** for polygon-based boundary checking, `validateLocation()` with support for both polygon and circular geofences, `validateTimestamp()` and `checkGpsAccuracy()` for anti-spoofing, and `getCurrentLocation()` wrapper for the browser Geolocation API. |
+| `src/lib/storage.ts` | **Data Persistence Module** — CRUD operations for users, geofences, attendance records, and anomalies via localStorage. Handles registration with phone number field. |
+| `src/lib/geofence.ts` | **Location & Geofence Validation Module** — Haversine formula, polygon centroid calculation, `validateLocation()`, `validateTimestamp()` and `checkGpsAccuracy()` for anti-spoofing, and `getCurrentLocation()` with watchPosition. |
+| `src/lib/webauthn.ts` | **Biometric Authentication Module** — WebAuthn credential registration (limited to 1 per user), biometric verification, and credential status checks. Uses platform authenticator for fingerprint/Face ID. |
 
 ### Authentication
 
 | File | Purpose |
 |------|---------|
-| `src/contexts/AuthContext.tsx` | **User Authentication Module** — React context providing `login()`, `register()`, `logout()`, and current `user` state throughout the app. Seeds the default admin on mount. |
+| `src/contexts/AuthContext.tsx` | React context providing `login()`, `register()`, `logout()`, and current `user` state. Seeds default admin on mount. |
+
+### Components
+
+| File | Purpose |
+|------|---------|
+| `src/components/VerificationDialog.tsx` | **Identity Verification Popup** — Appears after geofence validation passes. Offers fingerprint (WebAuthn) or OTP verification. Handles first-time fingerprint registration with one-credential limit enforcement. |
 
 ### Pages (UI Layer)
 
 | File | Purpose |
 |------|---------|
-| `src/pages/Login.tsx` | Login screen with email/password form, show/hide password toggle, demo admin credentials, and link to registration. |
-| `src/pages/Register.tsx` | Registration screen with role selection (Student/Faculty), department, and optional student ID fields. |
-| `src/pages/Dashboard.tsx` | **Attendance Management Module** — Student/Faculty dashboard. Shows check-in/check-out button with pulsing animation, current status, today's stats, and recent attendance history. Orchestrates the full check-in flow: location capture → anti-spoofing validation → geofence matching → record creation or rejection. |
-| `src/pages/AdminDashboard.tsx` | **Admin Dashboard & Reporting Module** — Tabbed interface with: (1) Geofence zone management with 4-corner coordinate input, (2) Attendance records with distance and status, (3) Anomaly flags with type labels, (4) User list with roles. Shows aggregate statistics at the top. |
+| `src/pages/Login.tsx` | Login screen with email/password form, demo admin credentials. |
+| `src/pages/Register.tsx` | Registration with role selection, department, student ID, and **phone number** (required for OTP). |
+| `src/pages/Dashboard.tsx` | Student/Faculty dashboard. Full check-in flow: location capture → anti-spoofing → geofence validation → **identity verification** → attendance record. |
+| `src/pages/AdminDashboard.tsx` | Admin dashboard: geofence management, attendance records, anomaly reports, user list. |
 | `src/pages/NotFound.tsx` | 404 fallback page. |
 
 ### Design System
 
 | File | Purpose |
 |------|---------|
-| `src/index.css` | CSS design tokens. Dark navy (`#0F172A`) background with emerald (`#10B981`) primary accent. Defines all HSL color variables, custom scrollbar, and font imports (Inter + JetBrains Mono). |
-| `tailwind.config.ts` | Tailwind configuration extending the base with semantic color tokens (background, foreground, primary, card, warning, success, etc.), custom animations (`pulse-ring`, `slide-up`), and border radius tokens. |
-
-### UI Components (shadcn/ui)
-
-All files in `src/components/ui/` are pre-built, accessible UI primitives from shadcn/ui (Button, Card, Input, Badge, Tabs, Sheet, Select, Switch, Toast, etc.). They use the design tokens from `index.css`.
+| `src/index.css` | CSS design tokens with HSL color variables, custom scrollbar, font imports (Inter + JetBrains Mono). |
+| `tailwind.config.ts` | Tailwind configuration with semantic color tokens, animations, and border radius tokens. |
 
 ---
 
-## 🧮 Algorithms Used
+## 🧮 Algorithms & Security
 
-### 1. Haversine Formula (Distance Calculation)
+### Haversine Formula (Distance Calculation)
 
-The Haversine formula calculates the **great-circle distance** between two points on Earth given their latitude and longitude. Used to report how far a student is from the classroom center.
-
-**Formula:**
+Calculates the great-circle distance between two points on Earth:
 ```
 a = sin²(Δlat/2) + cos(lat1) · cos(lat2) · sin²(Δlon/2)
 c = 2 · atan2(√a, √(1−a))
-d = R · c
+d = R · c    (R = 6,371,000m)
 ```
 
-Where **R = 6,371,000 meters** (Earth's radius). The result `d` gives the distance in meters.
+### Anti-Spoofing Checks
 
-**Used in:** `src/lib/geofence.ts` → `haversineDistance()`
+| Check | Description | Threshold |
+|-------|-------------|-----------|
+| Timestamp Consistency | Rejects if client timestamp drifts from device time | >30 seconds |
+| GPS Accuracy | Flags suspiciously perfect accuracy (mock GPS tools) | ≤1 meter |
 
-### 2. Anti-Spoofing Checks
+### WebAuthn Security
 
-| Check | Description | File |
-|-------|-------------|------|
-| Timestamp Consistency | Rejects if client timestamp drifts >30 seconds from server time | `validateTimestamp()` |
-| GPS Accuracy | Flags suspiciously perfect accuracy (<1m), common in GPS spoofing tools | `checkGpsAccuracy()` |
+- Credentials stored in device's Secure Enclave / TPM (cannot be exported)
+- Platform authenticator only (no external security keys)
+- User verification required (biometric must match)
+- One credential per user enforced at application level
+
+---
+
+## ⚙️ System Architecture
+
+```
+┌──────────────────┐     ┌───────────────────┐     ┌──────────────────┐
+│   Mobile App     │────▶│  Geofence Engine   │────▶│  Lovable Cloud   │
+│  (React + TS)    │     │  (Haversine +      │     │  (Database +     │
+│                  │     │   Polygon check)   │     │   Auth + Edge)   │
+└──────────────────┘     └───────────────────┘     └──────────────────┘
+        │                         │                         │
+        ▼                         ▼                         ▼
+┌──────────────────┐     ┌───────────────────┐     ┌──────────────────┐
+│  GPS Location    │     │  Anti-Spoofing     │     │  Identity        │
+│  (Geolocation    │     │  (Timestamp +      │     │  Verification    │
+│   API)           │     │   Accuracy checks) │     │  (WebAuthn + OTP)│
+└──────────────────┘     └───────────────────┘     └──────────────────┘
+```
+
+### Complete Check-In Flow
+
+```
+Student opens app
+        │
+        ▼
+  Clicks "Capture Location"
+  (GPS watchPosition — best accuracy within timeout)
+        │
+        ▼
+  Selects class from dropdown
+        │
+        ▼
+  Clicks "Check In"
+        │
+        ▼
+  Anti-spoofing checks
+  (timestamp drift <30s, accuracy >1m)
+        │
+        ▼
+  Geofence validation
+  (Haversine distance from polygon centroid)
+        │
+    ┌───┴───┐
+    YES     NO
+    │       │
+    ▼       ▼
+  Identity  Rejected
+  Verification  (anomaly logged)
+  Popup
+    │
+    ├── Fingerprint (WebAuthn)
+    │   └── Verify biometric → ✅ Attendance recorded
+    │
+    └── OTP (SMS)
+        └── Enter 6-digit code → ✅ Attendance recorded
+```
 
 ---
 
@@ -104,87 +193,20 @@ Where **R = 6,371,000 meters** (Earth's radius). The result `d` gives the distan
 - **VS Code** — [Download](https://code.visualstudio.com/)
 - **Git** — [Download](https://git-scm.com/)
 
-### Step-by-Step: Running in VS Code
+### Step-by-Step
 
 ```bash
 # 1. Clone the repository
 git clone <YOUR_GIT_URL>
 cd <YOUR_PROJECT_NAME>
 
-# 2. Open in VS Code
-code .
-
-# 3. Open a terminal in VS Code (Ctrl + ` or Terminal → New Terminal)
-
-# 4. Install dependencies
+# 2. Install dependencies
 npm install
 
-# 5. Start the development server
+# 3. Start the development server
 npm run dev
 
-# 6. Open http://localhost:8080 in your browser
-#    The app will auto-reload when you make changes.
-```
-
-### VS Code Recommended Extensions
-- **ES7+ React/Redux/React-Native snippets** — React code shortcuts
-- **Tailwind CSS IntelliSense** — Autocomplete for Tailwind classes
-- **TypeScript Importer** — Auto-import TypeScript modules
-- **Prettier** — Code formatting
-
----
-
-### Running as a Native Mobile App (Capacitor)
-
-This is the recommended approach to run the app on an actual phone.
-
-#### Prerequisites
-- **Android Studio** (for Android) — [Download](https://developer.android.com/studio)
-- **Xcode** (for iOS, Mac only) — [Download from Mac App Store](https://apps.apple.com/app/xcode/id497799835)
-
-#### Step-by-Step Setup
-
-```bash
-# 1. Install Capacitor
-npm install @capacitor/core @capacitor/cli @capacitor/ios @capacitor/android
-
-# 2. Initialize Capacitor
-npx cap init "GeoAttend" "app.geoattend.mobile" --web-dir dist
-
-# 3. Build the web app
-npm run build
-
-# 4. Add mobile platforms
-npx cap add android    # For Android
-npx cap add ios        # For iOS (Mac only)
-
-# 5. Sync web code to native projects
-npx cap sync
-
-# 6. Open in native IDE
-npx cap open android   # Opens Android Studio
-npx cap open ios       # Opens Xcode
-```
-
-#### Running on Android Phone
-1. Open the project in **Android Studio** (`npx cap open android`)
-2. Connect your Android phone via USB (enable **Developer Mode** + **USB Debugging**)
-3. Click the **Run** button (green play icon) and select your device
-4. The app will install and launch on your phone
-5. Grant **Location permissions** when prompted
-
-#### Running on iOS (iPhone)
-1. Open the project in **Xcode** (`npx cap open ios`)
-2. Select your development team in **Signing & Capabilities**
-3. Connect your iPhone via USB
-4. Click the **Run** button and select your device
-5. Trust the developer certificate on your phone: Settings → General → VPN & Device Management
-
-#### After Making Code Changes
-```bash
-npm run build        # Rebuild the web app
-npx cap sync         # Sync changes to native project
-npx cap run android  # or: npx cap run ios
+# 4. Open http://localhost:8080 in your browser
 ```
 
 ---
@@ -195,52 +217,7 @@ npx cap run android  # or: npx cap run ios
 |------|-------|----------|
 | Admin | admin@geoattend.com | admin123 |
 
-Students and faculty can register via the registration page.
-
----
-
-## ⚙️ System Architecture
-
-```
-┌──────────────────┐     ┌───────────────────┐     ┌──────────────────┐
-│   Mobile App     │────▶│  Geofence Engine   │────▶│  localStorage    │
-│  (React + Cap.)  │     │  (Ray Casting +    │     │  (JSON storage)  │
-│                  │     │   Haversine calc)  │     │                  │
-└──────────────────┘     └───────────────────┘     └──────────────────┘
-        │                         │
-        ▼                         ▼
-┌──────────────────┐     ┌───────────────────┐
-│  GPS Location    │     │  Anti-Spoofing     │
-│  (Geolocation    │     │  (Timestamp +      │
-│   API)           │     │   Accuracy checks) │
-└──────────────────┘     └───────────────────┘
-```
-
-### Validation Flow
-
-```
-Student taps "Check In"
-        │
-        ▼
-  Capture GPS coordinates
-        │
-        ▼
-  Anti-spoofing checks
-  (timestamp + accuracy)
-        │
-        ▼
-  For each active geofence:
-    Run Ray Casting algorithm
-    (Is student inside the 4-corner polygon?)
-        │
-    ┌───┴───┐
-    YES     NO
-    │       │
-    ▼       ▼
-  Log      Try next zone
-  valid    or reject
-  attendance
-```
+Students and faculty can register via the registration page (phone number required).
 
 ---
 
@@ -251,9 +228,9 @@ Student taps "Check In"
 - **Tailwind CSS** — Utility-first styling
 - **shadcn/ui** — Accessible component library
 - **Vite** — Build tool with HMR
-- **Capacitor** — Native mobile app wrapper
+- **Web Authentication API (WebAuthn)** — Fingerprint/biometric verification
+- **Lovable Cloud** — Backend database, auth, and edge functions
 - **Geolocation API** — GPS coordinate capture
-- **localStorage** — Client-side data persistence
 
 ---
 
