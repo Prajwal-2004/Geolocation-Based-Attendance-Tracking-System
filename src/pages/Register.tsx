@@ -1,14 +1,13 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Fingerprint, Loader2, CheckCircle2, AlertTriangle } from 'lucide-react';
+import { MessageSquare, Loader2, CheckCircle2, UserPlus } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { UserRole } from '@/types';
-import { isWebAuthnSupported, registerBiometric } from '@/lib/webauthn';
 
 const Register = () => {
   const [name, setName] = useState('');
@@ -18,10 +17,16 @@ const Register = () => {
   const [department, setDepartment] = useState('');
   const [studentId, setStudentId] = useState('');
   const [phoneNumber, setPhoneNumber] = useState('');
-  const [step, setStep] = useState<'form' | 'fingerprint'>('form');
+
+  // OTP verification step
+  const [step, setStep] = useState<'form' | 'otp'>('form');
   const [registeredUser, setRegisteredUser] = useState<any>(null);
-  const [fpStatus, setFpStatus] = useState<'idle' | 'loading' | 'success' | 'error'>('idle');
-  const [fpError, setFpError] = useState('');
+  const [otpSent, setOtpSent] = useState(false);
+  const [otpCode, setOtpCode] = useState('');
+  const [generatedOtp, setGeneratedOtp] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState('');
+
   const { register } = useAuth();
   const navigate = useNavigate();
   const { toast } = useToast();
@@ -36,15 +41,10 @@ const Register = () => {
       setRegisteredUser(user);
       toast({ title: 'Account created!', description: `Welcome, ${user.name}` });
 
-      // If student and WebAuthn supported, go to fingerprint step and auto-trigger
-      const webauthnAvailable = isWebAuthnSupported();
-      console.log('[GeoAttend] WebAuthn supported:', webauthnAvailable);
-      console.log('[GeoAttend] User role:', user.role);
-      if (user.role === 'student' && webauthnAvailable) {
-        console.log('[GeoAttend] Moving to fingerprint step & auto-triggering');
-        setStep('fingerprint');
-        // Directly trigger with user object to avoid stale closure
-        setTimeout(() => handleRegisterFingerprint(user), 100);
+      if (user.role === 'student' && user.phoneNumber) {
+        // Go to OTP verification step
+        setStep('otp');
+        sendOtp(user.phoneNumber);
       } else {
         navigate(user.role === 'admin' ? '/admin' : '/dashboard');
       }
@@ -53,28 +53,29 @@ const Register = () => {
     }
   };
 
-  const handleRegisterFingerprint = useCallback(async (userOverride?: any) => {
-    const targetUser = userOverride || registeredUser;
-    if (!targetUser) {
-      console.log('[GeoAttend] No user available for fingerprint registration');
-      return;
-    }
-    setFpStatus('loading');
-    setFpError('');
-    try {
-      console.log('[GeoAttend] Calling registerBiometric for:', targetUser.name);
-      await registerBiometric(targetUser.id, targetUser.name);
-      setFpStatus('success');
-      toast({ title: 'Fingerprint registered!', description: 'You can now use biometric verification for check-in.' });
-      setTimeout(() => navigate('/dashboard'), 1500);
-    } catch (err: any) {
-      console.log('[GeoAttend] Fingerprint registration error:', err.message);
-      setFpStatus('error');
-      setFpError(err.message);
-    }
-  }, [registeredUser, navigate, toast]);
+  const sendOtp = (phone: string) => {
+    setIsLoading(true);
+    setError('');
+    const otp = Math.floor(100000 + Math.random() * 900000).toString();
+    setGeneratedOtp(otp);
+    setTimeout(() => {
+      setOtpSent(true);
+      setIsLoading(false);
+      console.log(`[DEV] OTP for ${phone}: ${otp}`);
+    }, 1500);
+  };
 
-  if (step === 'fingerprint') {
+  const handleVerifyOtp = () => {
+    setError('');
+    if (otpCode === generatedOtp) {
+      toast({ title: 'Phone verified!', description: 'Your phone number has been verified. Redirecting...' });
+      setTimeout(() => navigate('/dashboard'), 1000);
+    } else {
+      setError('Invalid OTP. Please try again.');
+    }
+  };
+
+  if (step === 'otp') {
     return (
       <div className="flex min-h-screen items-center justify-center p-4 relative overflow-hidden">
         <div className="absolute top-0 right-0 w-96 h-96 bg-primary/5 rounded-full blur-3xl translate-x-1/2 -translate-y-1/2" />
@@ -83,59 +84,62 @@ const Register = () => {
         <Card className="w-full max-w-md border-border/30 bg-card/60 backdrop-blur-xl shadow-2xl relative z-10">
           <CardContent className="p-8 text-center space-y-6">
             <div className="mx-auto flex h-20 w-20 items-center justify-center rounded-full border-2 border-primary/20 bg-primary/10 shadow-lg shadow-primary/10">
-              {fpStatus === 'loading' ? (
+              {isLoading ? (
                 <Loader2 className="h-10 w-10 text-primary animate-spin" />
-              ) : fpStatus === 'success' ? (
+              ) : otpSent ? (
                 <CheckCircle2 className="h-10 w-10 text-primary" />
-              ) : fpStatus === 'error' ? (
-                <AlertTriangle className="h-10 w-10 text-destructive" />
               ) : (
-                <Fingerprint className="h-10 w-10 text-primary" />
+                <MessageSquare className="h-10 w-10 text-primary" />
               )}
             </div>
 
             <div>
               <h1 className="text-2xl font-bold tracking-tight">
-                {fpStatus === 'success' ? 'Fingerprint Registered!' : 'Register Your Fingerprint'}
+                {otpSent ? 'Enter Verification Code' : 'Sending OTP...'}
               </h1>
               <p className="text-sm text-muted-foreground mt-2">
-                {fpStatus === 'success'
-                  ? 'Your biometric identity has been saved. Redirecting...'
-                  : 'Register your fingerprint now for quick identity verification during check-in. Only ONE fingerprint is allowed per account.'}
+                {otpSent
+                  ? `Enter the 6-digit code sent to ***${registeredUser?.phoneNumber?.slice(-4)}`
+                  : 'Sending a verification code to your phone...'}
               </p>
+              {otpSent && (
+                <p className="text-xs text-amber-500 mt-2 font-medium">
+                  Demo mode: Check browser console for OTP
+                </p>
+              )}
             </div>
 
-            {fpError && (
+            {error && (
               <div className="rounded-xl bg-destructive/10 border border-destructive/20 p-3 text-sm text-destructive text-left">
-                {fpError}
+                {error}
               </div>
             )}
 
-            {fpStatus !== 'success' && (
-              <div className="space-y-3">
-                <Button
-                  onClick={handleRegisterFingerprint}
-                  disabled={fpStatus === 'loading'}
-                  className="w-full h-12 font-semibold rounded-xl shadow-lg shadow-primary/20"
-                  size="lg"
-                >
-                  {fpStatus === 'loading' ? (
-                    <>
-                      <Loader2 className="mr-2 h-5 w-5 animate-spin" />
-                      Registering...
-                    </>
-                  ) : fpStatus === 'error' ? (
-                    <>
-                      <Fingerprint className="mr-2 h-5 w-5" />
-                      Try Again
-                    </>
-                  ) : (
-                    <>
-                      <Fingerprint className="mr-2 h-5 w-5" />
-                      Register Fingerprint
-                    </>
-                  )}
-                </Button>
+            {otpSent && (
+              <div className="space-y-4">
+                <Input
+                  value={otpCode}
+                  onChange={e => setOtpCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                  placeholder="Enter 6-digit code"
+                  className="text-center text-lg tracking-[0.5em] font-mono bg-secondary/40 border-border/50 h-12"
+                  maxLength={6}
+                />
+                <div className="flex gap-2">
+                  <Button
+                    variant="outline"
+                    className="flex-1 rounded-xl"
+                    onClick={() => { setOtpSent(false); setOtpCode(''); setError(''); sendOtp(registeredUser?.phoneNumber); }}
+                  >
+                    Resend
+                  </Button>
+                  <Button
+                    className="flex-1 rounded-xl"
+                    onClick={handleVerifyOtp}
+                    disabled={otpCode.length !== 6}
+                  >
+                    Verify
+                  </Button>
+                </div>
               </div>
             )}
           </CardContent>
@@ -153,7 +157,7 @@ const Register = () => {
         <CardContent className="p-8">
           <div className="text-center space-y-4 mb-8">
             <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-2xl bg-primary/10 border border-primary/20 shadow-lg shadow-primary/10">
-              <Fingerprint className="h-8 w-8 text-primary" />
+              <UserPlus className="h-8 w-8 text-primary" />
             </div>
             <div>
               <h1 className="text-3xl font-bold tracking-tight">Create Account</h1>
@@ -200,13 +204,13 @@ const Register = () => {
             )}
             <div className="space-y-1.5">
               <label className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Phone Number</label>
-              <Input 
-                type="tel" 
-                value={phoneNumber} 
-                onChange={e => setPhoneNumber(e.target.value)} 
-                required 
-                className="bg-secondary/40 border-border/50 h-11" 
-                placeholder="+1234567890" 
+              <Input
+                type="tel"
+                value={phoneNumber}
+                onChange={e => setPhoneNumber(e.target.value)}
+                required
+                className="bg-secondary/40 border-border/50 h-11"
+                placeholder="+1234567890"
               />
               <p className="text-[10px] text-muted-foreground">Required for OTP verification during check-in</p>
             </div>
