@@ -198,7 +198,7 @@ const AdminDashboard = () => {
                       <SelectContent>
                         {facultyUsers.map(f => (
                           <SelectItem key={f.id} value={f.id}>
-                            {f.name}{f.subject ? ` — ${f.subject}` : ''}{f.department ? ` (${f.department})` : ''}
+                            {f.name}{f.subject ? ` — ${f.subject}` : ''}{f.course ? ` (${f.course})` : ''}
                           </SelectItem>
                         ))}
                       </SelectContent>

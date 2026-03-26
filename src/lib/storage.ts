@@ -122,6 +122,6 @@ export const addAnomaly = (anomaly: Omit<AnomalyLog, 'id'>): AnomalyLog => {
 export const seedDefaultAdmin = () => {
   const users = getUsers();
   if (!users.find(u => u.role === 'admin')) {
-    registerUser({ email: 'admin@geoattend.com', name: 'System Admin', role: 'admin', department: 'Administration' }, 'admin123');
+    registerUser({ email: 'admin@geoattend.com', name: 'System Admin', role: 'admin' }, 'admin123');
   }
 };

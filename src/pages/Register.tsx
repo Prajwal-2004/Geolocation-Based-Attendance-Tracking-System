@@ -7,17 +7,19 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { MessageSquare, Loader2, CheckCircle2, UserPlus } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
-import { UserRole } from '@/types';
+import { UserRole, ENGINEERING_COURSES, SEMESTERS } from '@/types';
 
 const Register = () => {
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [role, setRole] = useState<UserRole>('student');
-  const [department, setDepartment] = useState('');
+  const [course, setCourse] = useState('');
+  const [semester, setSemester] = useState('');
   const [studentId, setStudentId] = useState('');
   const [phoneNumber, setPhoneNumber] = useState('');
   const [subject, setSubject] = useState('');
+  const [classTeacherOf, setClassTeacherOf] = useState('NA');
 
   // OTP verification step
   const [step, setStep] = useState<'form' | 'otp'>('form');
@@ -32,15 +34,26 @@ const Register = () => {
   const navigate = useNavigate();
   const { toast } = useToast();
 
+  // Build class teacher options: "semester-course" combos
+  const classTeacherOptions = SEMESTERS.flatMap(sem =>
+    ENGINEERING_COURSES.map(c => ({
+      value: `${sem}-${c}`,
+      label: `Sem ${sem} — ${c}`,
+    }))
+  );
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     try {
       const user = register(
         {
-          email, name, role, department,
+          email, name, role,
+          course: course || undefined,
+          semester: semester || undefined,
           studentId: role === 'student' ? studentId : undefined,
           phoneNumber: phoneNumber || undefined,
           subject: role === 'faculty' ? subject : undefined,
+          classTeacherOf: role === 'faculty' ? classTeacherOf : undefined,
         },
         password
       );
@@ -51,7 +64,7 @@ const Register = () => {
         setStep('otp');
         sendOtp(user.phoneNumber);
       } else {
-        navigate(user.role === 'admin' ? '/admin' : '/dashboard');
+        navigate(user.role === 'admin' ? '/admin' : user.role === 'faculty' ? '/teacher' : '/dashboard');
       }
     } catch (err: any) {
       toast({ title: 'Registration failed', description: err.message, variant: 'destructive' });
@@ -183,37 +196,84 @@ const Register = () => {
               <label className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Password</label>
               <Input type="password" value={password} onChange={e => setPassword(e.target.value)} required className="bg-secondary/40 border-border/50 h-11" placeholder="Min 6 characters" minLength={6} />
             </div>
+
+            <div className="space-y-1.5">
+              <label className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Role</label>
+              <Select value={role} onValueChange={v => setRole(v as UserRole)}>
+                <SelectTrigger className="bg-secondary/40 border-border/50 h-11">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="student">Student</SelectItem>
+                  <SelectItem value="faculty">Faculty</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            {/* Course & Semester — shared by student and faculty */}
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5">
-                <label className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Role</label>
-                <Select value={role} onValueChange={v => setRole(v as UserRole)}>
+                <label className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Course</label>
+                <Select value={course} onValueChange={setCourse}>
                   <SelectTrigger className="bg-secondary/40 border-border/50 h-11">
-                    <SelectValue />
+                    <SelectValue placeholder="Select course" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="student">Student</SelectItem>
-                    <SelectItem value="faculty">Faculty</SelectItem>
+                    {ENGINEERING_COURSES.map(c => (
+                      <SelectItem key={c} value={c}>{c}</SelectItem>
+                    ))}
                   </SelectContent>
                 </Select>
               </div>
               <div className="space-y-1.5">
-                <label className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Department</label>
-                <Input value={department} onChange={e => setDepartment(e.target.value)} className="bg-secondary/40 border-border/50 h-11" placeholder="CS" />
+                <label className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Semester</label>
+                <Select value={semester} onValueChange={setSemester}>
+                  <SelectTrigger className="bg-secondary/40 border-border/50 h-11">
+                    <SelectValue placeholder="Sem" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {SEMESTERS.map(s => (
+                      <SelectItem key={s} value={s}>Semester {s}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
             </div>
+
             {role === 'student' && (
               <div className="space-y-1.5">
                 <label className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Student ID</label>
                 <Input value={studentId} onChange={e => setStudentId(e.target.value)} className="bg-secondary/40 border-border/50 h-11" placeholder="STU-001" />
               </div>
             )}
+
             {role === 'faculty' && (
-              <div className="space-y-1.5">
-                <label className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Subject</label>
-                <Input value={subject} onChange={e => setSubject(e.target.value)} required className="bg-secondary/40 border-border/50 h-11" placeholder="e.g., Data Structures" />
-                <p className="text-[10px] text-muted-foreground">The subject you teach</p>
-              </div>
+              <>
+                <div className="space-y-1.5">
+                  <label className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Subject</label>
+                  <Input value={subject} onChange={e => setSubject(e.target.value)} required className="bg-secondary/40 border-border/50 h-11" placeholder="e.g., Data Structures" />
+                  <p className="text-[10px] text-muted-foreground">The subject you teach</p>
+                </div>
+                <div className="space-y-1.5">
+                  <label className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Class Teacher Of</label>
+                  <Select value={classTeacherOf} onValueChange={setClassTeacherOf}>
+                    <SelectTrigger className="bg-secondary/40 border-border/50 h-11">
+                      <SelectValue placeholder="Select class..." />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="NA">NA — Not a class teacher</SelectItem>
+                      {classTeacherOptions.map(opt => (
+                        <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <p className="text-[10px] text-muted-foreground">
+                    If you're a class teacher, select your class to view all students' attendance across all subjects
+                  </p>
+                </div>
+              </>
             )}
+
             <div className="space-y-1.5">
               <label className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Phone Number</label>
               <Input

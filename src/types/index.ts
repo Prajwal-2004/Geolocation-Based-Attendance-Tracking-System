@@ -1,15 +1,37 @@
 export type UserRole = 'student' | 'faculty' | 'admin';
 
+export const ENGINEERING_COURSES = [
+  'Computer Science & Engineering',
+  'Electronics & Communication Engineering',
+  'Electrical & Electronics Engineering',
+  'Mechanical Engineering',
+  'Civil Engineering',
+  'Information Technology',
+  'Chemical Engineering',
+  'Aerospace Engineering',
+  'Biotechnology Engineering',
+  'Automobile Engineering',
+] as const;
+
+export const SEMESTERS = ['1', '2', '3', '4', '5', '6', '7', '8'] as const;
+
 export interface User {
   id: string;
   email: string;
   name: string;
   role: UserRole;
+  /** @deprecated Use course + semester instead */
   department?: string;
+  /** Engineering course */
+  course?: string;
+  /** Semester (1-8) */
+  semester?: string;
   studentId?: string;
   phoneNumber?: string;
   /** Subject taught (faculty only) */
   subject?: string;
+  /** If faculty is a class teacher, stores the class as "semester-course" e.g. "3-Computer Science & Engineering". "NA" means not a class teacher. */
+  classTeacherOf?: string;
   createdAt: string;
 }
 

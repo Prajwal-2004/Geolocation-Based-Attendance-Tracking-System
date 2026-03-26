@@ -4,31 +4,54 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { BookOpen, Users, CheckCircle2, XCircle, Clock, LogOut, BarChart3 } from 'lucide-react';
+import { BookOpen, Users, CheckCircle2, XCircle, Clock, LogOut, BarChart3, GraduationCap } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
-import { getAttendanceRecords, getGeofences } from '@/lib/storage';
-import { AttendanceRecord, Geofence } from '@/types';
+import { getAttendanceRecords, getGeofences, getUsers } from '@/lib/storage';
+import { AttendanceRecord, Geofence, User as AppUser } from '@/types';
 
 const TeacherDashboard = () => {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
 
-  // Get geofences assigned to this teacher
+  const isClassTeacher = user?.classTeacherOf && user.classTeacherOf !== 'NA';
+
+  // Parse class teacher assignment: "semester-course"
+  const classTeacherSem = isClassTeacher ? user!.classTeacherOf!.split('-')[0] : null;
+  const classTeacherCourse = isClassTeacher ? user!.classTeacherOf!.substring(user!.classTeacherOf!.indexOf('-') + 1) : null;
+
+  // Get geofences assigned to this teacher (subject-specific)
   const myGeofences = useMemo(() => getGeofences().filter(g => g.teacherId === user?.id), [user?.id]);
   const myGeofenceIds = useMemo(() => new Set(myGeofences.map(g => g.id)), [myGeofences]);
 
   // Get attendance records for this teacher's classes
-  const records = useMemo(() =>
+  const myRecords = useMemo(() =>
     getAttendanceRecords().filter(r => myGeofenceIds.has(r.geofenceId)).reverse(),
     [myGeofenceIds]
   );
 
-  const validCount = records.filter(r => r.status === 'valid').length;
-  const todayRecords = records.filter(r => new Date(r.checkInTime).toDateString() === new Date().toDateString());
-  const todayValid = todayRecords.filter(r => r.status === 'valid').length;
+  // Class teacher view: all students in the assigned class (semester + course)
+  const allUsers = useMemo(() => getUsers(), []);
+  const classStudents = useMemo(() => {
+    if (!isClassTeacher) return [];
+    return allUsers.filter(u =>
+      u.role === 'student' &&
+      u.semester === classTeacherSem &&
+      u.course === classTeacherCourse
+    );
+  }, [isClassTeacher, classTeacherSem, classTeacherCourse, allUsers]);
 
-  // Unique students who attended
-  const uniqueStudents = new Set(records.filter(r => r.status === 'valid').map(r => r.userId)).size;
+  const classStudentIds = useMemo(() => new Set(classStudents.map(s => s.id)), [classStudents]);
+
+  // ALL attendance records for class students (across all subjects/geofences)
+  const classRecords = useMemo(() => {
+    if (!isClassTeacher) return [];
+    return getAttendanceRecords().filter(r => classStudentIds.has(r.userId)).reverse();
+  }, [isClassTeacher, classStudentIds]);
+
+  const validCount = myRecords.filter(r => r.status === 'valid').length;
+  const todayRecords = myRecords.filter(r => new Date(r.checkInTime).toDateString() === new Date().toDateString());
+  const todayValid = todayRecords.filter(r => r.status === 'valid').length;
+  const uniqueStudents = new Set(myRecords.filter(r => r.status === 'valid').map(r => r.userId)).size;
 
   return (
     <div className="min-h-screen bg-background">
@@ -40,7 +63,10 @@ const TeacherDashboard = () => {
           <div className="flex items-center gap-2">
             <div className="text-right mr-2">
               <p className="text-sm font-medium">{user?.name}</p>
-              <p className="text-[10px] text-muted-foreground">{user?.subject}{user?.department ? ` · ${user.department}` : ''}</p>
+              <p className="text-[10px] text-muted-foreground">
+                {user?.subject}
+                {isClassTeacher && ` · CT: Sem ${classTeacherSem} ${classTeacherCourse}`}
+              </p>
             </div>
             <Button variant="ghost" size="icon" onClick={() => { logout(); navigate('/login'); }} className="rounded-xl">
               <LogOut className="h-5 w-5" />
@@ -69,17 +95,20 @@ const TeacherDashboard = () => {
         </div>
 
         <Tabs defaultValue="classes" className="space-y-4">
-          <TabsList className="w-full grid grid-cols-2 bg-secondary/40 rounded-xl p-1">
+          <TabsList className={`w-full grid bg-secondary/40 rounded-xl p-1 ${isClassTeacher ? 'grid-cols-3' : 'grid-cols-2'}`}>
             <TabsTrigger value="classes" className="rounded-lg text-xs"><BookOpen className="h-3.5 w-3.5 mr-1" /> My Classes</TabsTrigger>
             <TabsTrigger value="attendance" className="rounded-lg text-xs"><BarChart3 className="h-3.5 w-3.5 mr-1" /> Attendance</TabsTrigger>
+            {isClassTeacher && (
+              <TabsTrigger value="class-teacher" className="rounded-lg text-xs"><GraduationCap className="h-3.5 w-3.5 mr-1" /> My Class</TabsTrigger>
+            )}
           </TabsList>
 
           {/* My Classes */}
           <TabsContent value="classes" className="space-y-2">
             {myGeofences.map(g => {
-              const classRecords = records.filter(r => r.geofenceId === g.id);
-              const classValid = classRecords.filter(r => r.status === 'valid').length;
-              const classTodayValid = classRecords.filter(r => r.status === 'valid' && new Date(r.checkInTime).toDateString() === new Date().toDateString()).length;
+              const classRecordsForZone = myRecords.filter(r => r.geofenceId === g.id);
+              const classValid = classRecordsForZone.filter(r => r.status === 'valid').length;
+              const classTodayValid = classRecordsForZone.filter(r => r.status === 'valid' && new Date(r.checkInTime).toDateString() === new Date().toDateString()).length;
               return (
                 <Card key={g.id} className="border-border/30">
                   <CardContent className="p-4">
@@ -116,9 +145,9 @@ const TeacherDashboard = () => {
             )}
           </TabsContent>
 
-          {/* Attendance Records */}
+          {/* Attendance Records (my subject) */}
           <TabsContent value="attendance" className="space-y-2">
-            {records.slice(0, 50).map(r => (
+            {myRecords.slice(0, 50).map(r => (
               <Card key={r.id} className="border-border/30">
                 <CardContent className="p-3.5 flex items-center gap-3">
                   <div className={`h-8 w-8 rounded-lg flex items-center justify-center shrink-0 ${r.status === 'valid' ? 'bg-success/10' : 'bg-destructive/10'}`}>
@@ -137,13 +166,80 @@ const TeacherDashboard = () => {
                 </CardContent>
               </Card>
             ))}
-            {records.length === 0 && (
+            {myRecords.length === 0 && (
               <div className="text-center py-12">
                 <BarChart3 className="h-10 w-10 text-muted-foreground/30 mx-auto mb-3" />
                 <p className="text-sm text-muted-foreground">No attendance records for your classes.</p>
               </div>
             )}
           </TabsContent>
+
+          {/* Class Teacher Tab — all students' attendance across all subjects */}
+          {isClassTeacher && (
+            <TabsContent value="class-teacher" className="space-y-4">
+              <Card className="border-primary/20 bg-primary/5">
+                <CardContent className="p-4">
+                  <div className="flex items-center gap-2 mb-2">
+                    <GraduationCap className="h-5 w-5 text-primary" />
+                    <p className="text-sm font-semibold">
+                      Class Teacher — Sem {classTeacherSem}, {classTeacherCourse}
+                    </p>
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    {classStudents.length} student{classStudents.length !== 1 ? 's' : ''} enrolled · Showing attendance across all subjects
+                  </p>
+                </CardContent>
+              </Card>
+
+              {/* Student-wise breakdown */}
+              {classStudents.map(student => {
+                const studentRecords = classRecords.filter(r => r.userId === student.id);
+                const studentValid = studentRecords.filter(r => r.status === 'valid').length;
+                const studentToday = studentRecords.filter(r => r.status === 'valid' && new Date(r.checkInTime).toDateString() === new Date().toDateString()).length;
+                return (
+                  <Card key={student.id} className="border-border/30">
+                    <CardContent className="p-4">
+                      <div className="flex items-center justify-between mb-2">
+                        <div>
+                          <p className="text-sm font-semibold">{student.name}</p>
+                          <p className="text-xs text-muted-foreground">
+                            {student.studentId || student.email} · Sem {student.semester}
+                          </p>
+                        </div>
+                        <div className="text-right">
+                          <p className="text-lg font-bold text-primary">{studentValid}</p>
+                          <p className="text-[10px] text-muted-foreground uppercase">Total</p>
+                        </div>
+                      </div>
+                      {studentToday > 0 && (
+                        <Badge className="text-xs rounded-lg">{studentToday} today</Badge>
+                      )}
+                      {/* Recent records for this student */}
+                      {studentRecords.slice(0, 5).map(r => (
+                        <div key={r.id} className="flex items-center gap-2 mt-2 text-xs text-muted-foreground">
+                          {r.status === 'valid' ? (
+                            <CheckCircle2 className="h-3 w-3 text-success shrink-0" />
+                          ) : (
+                            <XCircle className="h-3 w-3 text-destructive shrink-0" />
+                          )}
+                          <span className="truncate">
+                            {r.geofenceName}{r.teacherName ? ` · ${r.teacherName}` : ''}{r.teacherSubject ? ` (${r.teacherSubject})` : ''} · {new Date(r.checkInTime).toLocaleString()}
+                          </span>
+                        </div>
+                      ))}
+                    </CardContent>
+                  </Card>
+                );
+              })}
+
+              {classStudents.length === 0 && (
+                <div className="text-center py-12">
+                  <Users className="h-10 w-10 text-muted-foreground/30 mx-auto mb-3" />
+                  <p className="text-sm text-muted-foreground">No students registered for Sem {classTeacherSem}, {classTeacherCourse} yet.</p>
+                </div>
+              )}
+            </TabsContent>
+          )}
         </Tabs>
       </main>
     </div>
