@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -6,7 +6,8 @@ import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Switch } from '@/components/ui/switch';
-import { MapPin, Users, AlertTriangle, BarChart3, Trash2, LogOut, ArrowLeft, CheckCircle2, XCircle, Clock, Shield, Crosshair, Loader2 } from 'lucide-react';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { MapPin, Users, AlertTriangle, BarChart3, Trash2, LogOut, ArrowLeft, CheckCircle2, XCircle, Clock, Shield, Crosshair, Loader2, BookOpen } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { useNavigate } from 'react-router-dom';
 import { getGeofences, addGeofence, deleteGeofence, updateGeofence, getAttendanceRecords, getAnomalies, getUsers } from '@/lib/storage';
@@ -23,10 +24,14 @@ const AdminDashboard = () => {
   const [anomalies] = useState<AnomalyLog[]>(() => getAnomalies().reverse());
   const [users] = useState<AppUser[]>(getUsers);
 
-  // Geofence form — 4 corners with GPS capture
+  // Faculty users for teacher dropdown
+  const facultyUsers = useMemo(() => users.filter(u => u.role === 'faculty'), [users]);
+
+  // Geofence form
   const [gName, setGName] = useState('');
   const [gAccuracy, setGAccuracy] = useState('');
   const [gClassTime, setGClassTime] = useState('');
+  const [selectedTeacherId, setSelectedTeacherId] = useState('');
   const [corners, setCorners] = useState<Array<{ lat: string; lon: string }>>([
     { lat: '', lon: '' },
     { lat: '', lon: '' },
@@ -65,6 +70,10 @@ const AdminDashboard = () => {
     const centerLat = parsedCorners.reduce((s, c) => s + c.latitude, 0) / 4;
     const centerLon = parsedCorners.reduce((s, c) => s + c.longitude, 0) / 4;
     const accuracyVal = parseFloat(gAccuracy);
+
+    // Get selected teacher info
+    const selectedTeacher = facultyUsers.find(u => u.id === selectedTeacherId);
+
     const g = addGeofence({
       name: gName,
       latitude: centerLat,
@@ -73,6 +82,9 @@ const AdminDashboard = () => {
       corners: parsedCorners,
       accuracyMeters: !isNaN(accuracyVal) && accuracyVal > 0 ? accuracyVal : undefined,
       classStartTime: gClassTime || undefined,
+      teacherId: selectedTeacher?.id,
+      teacherName: selectedTeacher?.name,
+      teacherSubject: selectedTeacher?.subject,
       createdBy: user!.id,
       isActive: true,
     });
@@ -80,6 +92,7 @@ const AdminDashboard = () => {
     setGName('');
     setGAccuracy('');
     setGClassTime('');
+    setSelectedTeacherId('');
     setCorners([{ lat: '', lon: '' }, { lat: '', lon: '' }, { lat: '', lon: '' }, { lat: '', lon: '' }]);
     toast({ title: 'Geofence created', description: g.name });
   };
@@ -101,10 +114,11 @@ const AdminDashboard = () => {
   const formatCorners = (g: Geofence) => {
     const accuracy = g.accuracyMeters ? ` · ≤${g.accuracyMeters}m` : '';
     const timing = g.classStartTime ? ` · 🕐${g.classStartTime}` : '';
+    const teacher = g.teacherName ? ` · 👤${g.teacherName}${g.teacherSubject ? ` (${g.teacherSubject})` : ''}` : '';
     if (g.corners && g.corners.length === 4) {
-      return g.corners.map((c, i) => `C${i + 1}(${c.latitude.toFixed(4)}, ${c.longitude.toFixed(4)})`).join(' · ') + accuracy + timing;
+      return g.corners.map((c, i) => `C${i + 1}(${c.latitude.toFixed(4)}, ${c.longitude.toFixed(4)})`).join(' · ') + accuracy + timing + teacher;
     }
-    return `${g.latitude.toFixed(4)}, ${g.longitude.toFixed(4)} · ${g.radiusMeters}m` + accuracy + timing;
+    return `${g.latitude.toFixed(4)}, ${g.longitude.toFixed(4)} · ${g.radiusMeters}m` + accuracy + timing + teacher;
   };
 
   const cornerLabels = ['Front-Left', 'Front-Right', 'Back-Right', 'Back-Left'];
@@ -170,6 +184,29 @@ const AdminDashboard = () => {
                     required
                     className="bg-secondary/40 border-border/50 h-11"
                   />
+
+                  {/* Teacher Selection */}
+                  <div className="rounded-xl border border-border/30 bg-secondary/20 p-3 space-y-1.5">
+                    <p className="text-xs font-medium text-muted-foreground flex items-center gap-1.5">
+                      <BookOpen className="h-3.5 w-3.5" /> Assign Teacher & Subject
+                    </p>
+                    <p className="text-[10px] text-muted-foreground/70">Select the teacher responsible for this class. Their subject will be auto-filled.</p>
+                    <Select value={selectedTeacherId} onValueChange={setSelectedTeacherId}>
+                      <SelectTrigger className="bg-secondary/40 border-border/50 h-10">
+                        <SelectValue placeholder="Choose a teacher..." />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {facultyUsers.map(f => (
+                          <SelectItem key={f.id} value={f.id}>
+                            {f.name}{f.subject ? ` — ${f.subject}` : ''}{f.department ? ` (${f.department})` : ''}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    {facultyUsers.length === 0 && (
+                      <p className="text-xs text-amber-500">No faculty registered yet. Teachers must register first.</p>
+                    )}
+                  </div>
 
                   <div className="rounded-xl border border-border/30 bg-secondary/20 p-3 space-y-1.5">
                     <p className="text-xs font-medium text-muted-foreground">Accurate up to (meters)</p>
@@ -296,7 +333,7 @@ const AdminDashboard = () => {
                   <div className="flex-1 min-w-0">
                     <p className="text-sm font-medium">{r.userName} <Badge variant="outline" className="ml-1 text-[10px] capitalize">{r.userRole}</Badge></p>
                     <p className="text-xs text-muted-foreground">
-                      {r.geofenceName} · {new Date(r.checkInTime).toLocaleString()}
+                      {r.geofenceName}{r.teacherName ? ` · ${r.teacherName}` : ''}{r.teacherSubject ? ` (${r.teacherSubject})` : ''} · {new Date(r.checkInTime).toLocaleString()}
                       {r.checkOutTime && ` — ${new Date(r.checkOutTime).toLocaleTimeString()}`}
                     </p>
                     {r.rejectionReason && <p className="text-xs text-destructive mt-1">{r.rejectionReason}</p>}
@@ -346,7 +383,9 @@ const AdminDashboard = () => {
                   </div>
                   <div className="flex-1 min-w-0">
                     <p className="text-sm font-medium">{u.name}</p>
-                    <p className="text-xs text-muted-foreground">{u.email} {u.department && `· ${u.department}`}</p>
+                    <p className="text-xs text-muted-foreground">
+                      {u.email} {u.department && `· ${u.department}`} {u.subject && `· ${u.subject}`}
+                    </p>
                   </div>
                   <Badge variant="outline" className="capitalize text-xs rounded-lg">{u.role}</Badge>
                 </CardContent>

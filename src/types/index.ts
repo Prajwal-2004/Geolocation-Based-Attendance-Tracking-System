@@ -8,6 +8,8 @@ export interface User {
   department?: string;
   studentId?: string;
   phoneNumber?: string;
+  /** Subject taught (faculty only) */
+  subject?: string;
   createdAt: string;
 }
 
@@ -33,6 +35,12 @@ export interface Geofence {
   classStartTime?: string;
   /** Days of week the class runs (0=Sun, 1=Mon, ..., 6=Sat) */
   classDays?: number[];
+  /** Assigned teacher ID */
+  teacherId?: string;
+  /** Assigned teacher name */
+  teacherName?: string;
+  /** Assigned teacher's subject */
+  teacherSubject?: string;
   createdBy: string;
   createdAt: string;
   isActive: boolean;
@@ -52,6 +60,9 @@ export interface AttendanceRecord {
   distanceFromCenter: number;
   status: 'valid' | 'rejected' | 'flagged';
   rejectionReason?: string;
+  /** Teacher info for the class */
+  teacherName?: string;
+  teacherSubject?: string;
 }
 
 export interface LocationData {

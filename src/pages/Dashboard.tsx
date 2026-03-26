@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { LogIn, LogOut, Clock, CheckCircle2, XCircle, Navigation, Menu, Shield, MapPin, Crosshair } from 'lucide-react';
+import { LogIn, LogOut, Clock, CheckCircle2, XCircle, Navigation, Menu, Shield, MapPin, Crosshair, BookOpen } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { getCurrentLocation } from '@/lib/geofence';
 import { validateLocation, validateTimestamp, checkGpsAccuracy } from '@/lib/geofence';
@@ -139,12 +139,14 @@ const Dashboard = () => {
     if (!geofence) return;
     const location = capturedLocation;
     const result = validateLocation(location, geofence);
-    const record = addAttendanceRecord({
+      const record = addAttendanceRecord({
       userId: user.id, userName: user.name, userRole: user.role,
       geofenceId: geofence.id, geofenceName: geofence.name,
       checkInTime: new Date().toISOString(),
       latitude: location.latitude, longitude: location.longitude,
       distanceFromCenter: result.distance, status: 'valid',
+      teacherName: geofence.teacherName,
+      teacherSubject: geofence.teacherSubject,
     });
     setRecords([record, ...records]);
     setCapturedLocation(null);
@@ -195,6 +197,11 @@ const Dashboard = () => {
                 {isAdmin && (
                   <Button variant="ghost" className="w-full justify-start rounded-xl" onClick={() => navigate('/admin')}>
                     <Shield className="mr-2 h-4 w-4" /> Admin Panel
+                  </Button>
+                )}
+                {user?.role === 'faculty' && (
+                  <Button variant="ghost" className="w-full justify-start rounded-xl" onClick={() => navigate('/teacher')}>
+                    <BookOpen className="mr-2 h-4 w-4" /> Teacher Dashboard
                   </Button>
                 )}
                 <Button variant="ghost" className="w-full justify-start text-destructive rounded-xl" onClick={() => { logout(); navigate('/login'); }}>
@@ -275,7 +282,7 @@ const Dashboard = () => {
                     <SelectContent>
                       {activeGeofences.map(g => (
                         <SelectItem key={g.id} value={g.id}>
-                          {g.name}{g.classStartTime ? ` (${g.classStartTime})` : ''}
+                          {g.name}{g.teacherName ? ` — ${g.teacherName}` : ''}{g.teacherSubject ? ` (${g.teacherSubject})` : ''}{g.classStartTime ? ` · ${g.classStartTime}` : ''}
                         </SelectItem>
                       ))}
                     </SelectContent>
