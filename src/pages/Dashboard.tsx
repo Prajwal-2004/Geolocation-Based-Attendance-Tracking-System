@@ -275,7 +275,7 @@ const Dashboard = () => {
                     <SelectContent>
                       {activeGeofences.map(g => (
                         <SelectItem key={g.id} value={g.id}>
-                          {g.name}{g.classStartTime ? ` (${g.classStartTime})` : ''}
+                          {g.name}{g.teacherName ? ` — ${g.teacherName}` : ''}{g.teacherSubject ? ` (${g.teacherSubject})` : ''}{g.classStartTime ? ` · ${g.classStartTime}` : ''}
                         </SelectItem>
                       ))}
                     </SelectContent>
