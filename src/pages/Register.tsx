@@ -17,6 +17,7 @@ const Register = () => {
   const [department, setDepartment] = useState('');
   const [studentId, setStudentId] = useState('');
   const [phoneNumber, setPhoneNumber] = useState('');
+  const [subject, setSubject] = useState('');
 
   // OTP verification step
   const [step, setStep] = useState<'form' | 'otp'>('form');
@@ -35,14 +36,18 @@ const Register = () => {
     e.preventDefault();
     try {
       const user = register(
-        { email, name, role, department, studentId: role === 'student' ? studentId : undefined, phoneNumber: phoneNumber || undefined },
+        {
+          email, name, role, department,
+          studentId: role === 'student' ? studentId : undefined,
+          phoneNumber: phoneNumber || undefined,
+          subject: role === 'faculty' ? subject : undefined,
+        },
         password
       );
       setRegisteredUser(user);
       toast({ title: 'Account created!', description: `Welcome, ${user.name}` });
 
       if (user.role === 'student' && user.phoneNumber) {
-        // Go to OTP verification step
         setStep('otp');
         sendOtp(user.phoneNumber);
       } else {
@@ -200,6 +205,13 @@ const Register = () => {
               <div className="space-y-1.5">
                 <label className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Student ID</label>
                 <Input value={studentId} onChange={e => setStudentId(e.target.value)} className="bg-secondary/40 border-border/50 h-11" placeholder="STU-001" />
+              </div>
+            )}
+            {role === 'faculty' && (
+              <div className="space-y-1.5">
+                <label className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Subject</label>
+                <Input value={subject} onChange={e => setSubject(e.target.value)} required className="bg-secondary/40 border-border/50 h-11" placeholder="e.g., Data Structures" />
+                <p className="text-[10px] text-muted-foreground">The subject you teach</p>
               </div>
             )}
             <div className="space-y-1.5">
