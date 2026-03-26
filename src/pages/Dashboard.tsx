@@ -139,12 +139,14 @@ const Dashboard = () => {
     if (!geofence) return;
     const location = capturedLocation;
     const result = validateLocation(location, geofence);
-    const record = addAttendanceRecord({
+      const record = addAttendanceRecord({
       userId: user.id, userName: user.name, userRole: user.role,
       geofenceId: geofence.id, geofenceName: geofence.name,
       checkInTime: new Date().toISOString(),
       latitude: location.latitude, longitude: location.longitude,
       distanceFromCenter: result.distance, status: 'valid',
+      teacherName: geofence.teacherName,
+      teacherSubject: geofence.teacherSubject,
     });
     setRecords([record, ...records]);
     setCapturedLocation(null);

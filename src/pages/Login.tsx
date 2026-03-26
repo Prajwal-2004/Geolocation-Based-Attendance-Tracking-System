@@ -20,7 +20,7 @@ const Login = () => {
     try {
       const user = login(email, password);
       toast({ title: 'Welcome back!', description: `Logged in as ${user.name}` });
-      navigate(user.role === 'admin' ? '/admin' : '/dashboard');
+      navigate(user.role === 'admin' ? '/admin' : user.role === 'faculty' ? '/teacher' : '/dashboard');
     } catch (err: any) {
       toast({ title: 'Login failed', description: err.message, variant: 'destructive' });
     }
