@@ -1,6 +1,6 @@
 # GeoAttend — Geolocation-Based Attendance Tracking System
 
-A mobile-first attendance tracking application that uses real-time GPS coordinates, polygon-based geofencing, and **multi-factor identity verification** (fingerprint + OTP) to prevent proxy attendance. Built with React, TypeScript, and Tailwind CSS.
+A mobile-first attendance tracking application that uses real-time GPS coordinates, polygon-based geofencing, and **OTP-based identity verification** to prevent proxy attendance. Built with React, TypeScript, and Tailwind CSS.
 
 ---
 
@@ -10,11 +10,15 @@ A mobile-first attendance tracking application that uses real-time GPS coordinat
 - **GPS-based check-in/check-out** with real-time location capture
 - **4-corner polygon geofencing** — admin defines classroom boundaries using 4 coordinate points
 - **Haversine formula** for distance calculation and reporting
-- **Multi-factor identity verification** — fingerprint (WebAuthn) or OTP after geofence validation
-- **One fingerprint limit per student** — prevents proxy attendance via biometric sharing
+- **OTP identity verification** — 6-digit code sent to registered phone number after geofence validation
 - **Phone number registration** — required for OTP verification
+- **Course & Semester selection** — students and faculty choose from 10 engineering branches and semesters 1–8
+- **Class Teacher system** — faculty can be designated as class teacher for a specific semester+course, gaining access to all students' attendance across every subject
+- **Teacher assignment per geofence** — admin assigns a teacher and their subject to each zone
+- **Teacher Dashboard** — faculty view their assigned classes, attendance stats, and (if class teacher) a full cross-subject view of their class students
 - **Anti-spoofing measures** — timestamp consistency checks, GPS accuracy validation
 - **Admin dashboard** — geofence configuration, attendance records, anomaly reports, user management
+- **5-minute check-in buffer** — students must check in within 5 minutes of class start time
 - **Duplicate prevention** — prevents multiple active check-ins
 - **Anomaly logging** — flags suspicious activity for admin review
 - **Lovable Cloud backend** — database, authentication, edge functions
@@ -25,25 +29,26 @@ A mobile-first attendance tracking application that uses real-time GPS coordinat
 
 ### How It Works
 
-When a student is **inside the geofence** and clicks "Check In", a **verification popup** appears with two options:
+When a student is **inside the geofence** and clicks "Check In", a **verification popup** appears:
 
-#### Option 1: Fingerprint / Biometric (WebAuthn)
-- Uses the device's built-in fingerprint sensor or Face ID via the **Web Authentication API (FIDO2)**
-- **Limited to ONE fingerprint per student** — once registered, no additional biometrics can be added
-- First-time users are prompted to register their fingerprint; subsequent check-ins verify against it
-- Prevents proxy attendance by binding identity to a physical device biometric
-- Works entirely client-side via the platform authenticator (TPM/Secure Enclave)
-
-#### Option 2: OTP via SMS
+#### OTP via SMS
 - Sends a **6-digit one-time password** to the student's registered phone number
-- Phone number is **required during registration**
+- Phone number is **required during registration** and verified via OTP at signup
 - *Currently in demo mode* — OTP is logged to browser console (production would use an SMS provider via Lovable Cloud edge functions)
 
-### Why One Fingerprint?
-Students cannot register multiple fingerprints to prevent:
-- Sharing biometric credentials with friends for proxy attendance
-- Adding a friend's fingerprint to their account
-- The credential is bound to the physical device's secure hardware
+---
+
+## 🎓 Class Teacher Feature
+
+Faculty members can optionally be designated as a **Class Teacher** during registration:
+
+- **Not a class teacher (NA)**: They only see attendance for their own assigned geofence zones (subject-specific)
+- **Class teacher of Sem X, Course Y**: They get an additional **"My Class"** tab showing:
+  - All students enrolled in that semester + course
+  - Every attendance record for those students across **all subjects and teachers**
+  - Per-student breakdown with recent check-in history
+
+This enables class teachers to monitor overall student engagement, not just their own subject.
 
 ---
 
@@ -61,15 +66,14 @@ Students cannot register multiple fingerprints to prevent:
 
 | File | Purpose |
 |------|---------|
-| `src/types/index.ts` | TypeScript type definitions for `User` (with `phoneNumber` and `webauthnCredentialId`), `Geofence` (with `PolygonPoint[]` corners), `AttendanceRecord`, `LocationData`, and `AnomalyLog`. |
+| `src/types/index.ts` | TypeScript type definitions for `User` (with `phoneNumber`, `course`, `semester`, `classTeacherOf`), `Geofence` (with `PolygonPoint[]` corners, teacher assignment), `AttendanceRecord`, `LocationData`, and `AnomalyLog`. Also exports `ENGINEERING_COURSES` and `SEMESTERS` constants. |
 
 ### Core Logic (Business Logic Layer)
 
 | File | Purpose |
 |------|---------|
-| `src/lib/storage.ts` | **Data Persistence Module** — CRUD operations for users, geofences, attendance records, and anomalies via localStorage. Handles registration with phone number field. |
+| `src/lib/storage.ts` | **Data Persistence Module** — CRUD operations for users, geofences, attendance records, and anomalies via localStorage. Handles registration with phone number, course, and semester fields. |
 | `src/lib/geofence.ts` | **Location & Geofence Validation Module** — Haversine formula, polygon centroid calculation, `validateLocation()`, `validateTimestamp()` and `checkGpsAccuracy()` for anti-spoofing, and `getCurrentLocation()` with watchPosition. |
-| `src/lib/webauthn.ts` | **Biometric Authentication Module** — WebAuthn credential registration (limited to 1 per user), biometric verification, and credential status checks. Uses platform authenticator for fingerprint/Face ID. |
 
 ### Authentication
 
@@ -81,16 +85,17 @@ Students cannot register multiple fingerprints to prevent:
 
 | File | Purpose |
 |------|---------|
-| `src/components/VerificationDialog.tsx` | **Identity Verification Popup** — Appears after geofence validation passes. Offers fingerprint (WebAuthn) or OTP verification. Handles first-time fingerprint registration with one-credential limit enforcement. |
+| `src/components/VerificationDialog.tsx` | **Identity Verification Popup** — Appears after geofence validation passes. Sends OTP to student's registered phone and verifies the code before completing check-in. |
 
 ### Pages (UI Layer)
 
 | File | Purpose |
 |------|---------|
 | `src/pages/Login.tsx` | Login screen with email/password form, demo admin credentials. |
-| `src/pages/Register.tsx` | Registration with role selection, department, student ID, and **phone number** (required for OTP). |
-| `src/pages/Dashboard.tsx` | Student/Faculty dashboard. Full check-in flow: location capture → anti-spoofing → geofence validation → **identity verification** → attendance record. |
-| `src/pages/AdminDashboard.tsx` | Admin dashboard: geofence management, attendance records, anomaly reports, user list. |
+| `src/pages/Register.tsx` | Registration with role selection (Student/Faculty), **course & semester dropdowns** (10 engineering branches, semesters 1–8), student ID, phone number, subject (faculty), and **class teacher assignment** (faculty). |
+| `src/pages/Dashboard.tsx` | Student/Faculty dashboard. Full check-in flow: location capture → anti-spoofing → geofence validation → **OTP verification** → attendance record. Class dropdown shows teacher name and subject. |
+| `src/pages/TeacherDashboard.tsx` | Faculty dashboard: assigned classes stats, attendance records, and **class teacher tab** (cross-subject student attendance view). |
+| `src/pages/AdminDashboard.tsx` | Admin dashboard: geofence management with teacher/subject assignment, attendance records, anomaly reports, user list. |
 | `src/pages/NotFound.tsx` | 404 fallback page. |
 
 ### Design System
@@ -120,12 +125,11 @@ d = R · c    (R = 6,371,000m)
 | Timestamp Consistency | Rejects if client timestamp drifts from device time | >30 seconds |
 | GPS Accuracy | Flags suspiciously perfect accuracy (mock GPS tools) | ≤1 meter |
 
-### WebAuthn Security
+### 5-Minute Check-In Buffer
 
-- Credentials stored in device's Secure Enclave / TPM (cannot be exported)
-- Platform authenticator only (no external security keys)
-- User verification required (biometric must match)
-- One credential per user enforced at application level
+- Admin sets a **class start time** per geofence zone
+- Students must check in between the start time and **5 minutes after**
+- Early or late check-ins are automatically rejected with a descriptive message
 
 ---
 
@@ -142,7 +146,7 @@ d = R · c    (R = 6,371,000m)
 ┌──────────────────┐     ┌───────────────────┐     ┌──────────────────┐
 │  GPS Location    │     │  Anti-Spoofing     │     │  Identity        │
 │  (Geolocation    │     │  (Timestamp +      │     │  Verification    │
-│   API)           │     │   Accuracy checks) │     │  (WebAuthn + OTP)│
+│   API)           │     │   Accuracy checks) │     │  (OTP via SMS)   │
 └──────────────────┘     └───────────────────┘     └──────────────────┘
 ```
 
@@ -157,6 +161,7 @@ Student opens app
         │
         ▼
   Selects class from dropdown
+  (shows Zone — Teacher Name (Subject) · Time)
         │
         ▼
   Clicks "Check In"
@@ -166,6 +171,10 @@ Student opens app
   (timestamp drift <30s, accuracy >1m)
         │
         ▼
+  5-minute buffer check
+  (device time vs class start time)
+        │
+        ▼
   Geofence validation
   (Haversine distance from polygon centroid)
         │
@@ -173,15 +182,11 @@ Student opens app
     YES     NO
     │       │
     ▼       ▼
-  Identity  Rejected
+  OTP     Rejected
   Verification  (anomaly logged)
   Popup
     │
-    ├── Fingerprint (WebAuthn)
-    │   └── Verify biometric → ✅ Attendance recorded
-    │
-    └── OTP (SMS)
-        └── Enter 6-digit code → ✅ Attendance recorded
+    └── Enter 6-digit code → ✅ Attendance recorded
 ```
 
 ---
@@ -217,7 +222,7 @@ npm run dev
 |------|-------|----------|
 | Admin | admin@geoattend.com | admin123 |
 
-Students and faculty can register via the registration page (phone number required).
+Students and faculty can register via the registration page (phone number, course, and semester required).
 
 ---
 
@@ -228,7 +233,6 @@ Students and faculty can register via the registration page (phone number requir
 - **Tailwind CSS** — Utility-first styling
 - **shadcn/ui** — Accessible component library
 - **Vite** — Build tool with HMR
-- **Web Authentication API (WebAuthn)** — Fingerprint/biometric verification
 - **Lovable Cloud** — Backend database, auth, and edge functions
 - **Geolocation API** — GPS coordinate capture
 
