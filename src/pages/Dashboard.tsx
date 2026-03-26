@@ -199,6 +199,11 @@ const Dashboard = () => {
                     <Shield className="mr-2 h-4 w-4" /> Admin Panel
                   </Button>
                 )}
+                {user?.role === 'faculty' && (
+                  <Button variant="ghost" className="w-full justify-start rounded-xl" onClick={() => navigate('/teacher')}>
+                    <BookOpen className="mr-2 h-4 w-4" /> Teacher Dashboard
+                  </Button>
+                )}
                 <Button variant="ghost" className="w-full justify-start text-destructive rounded-xl" onClick={() => { logout(); navigate('/login'); }}>
                   <LogOut className="mr-2 h-4 w-4" /> Sign Out
                 </Button>
