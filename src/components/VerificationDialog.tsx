@@ -5,6 +5,7 @@ import { Input } from '@/components/ui/input';
 import { MessageSquare, Loader2, CheckCircle2, XCircle, ShieldCheck } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
+import { deliverOtp, requestNotificationPermission } from '@/lib/otp-delivery';
 
 interface VerificationDialogProps {
   open: boolean;
