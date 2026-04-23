@@ -24,8 +24,8 @@ Deno.serve(async (req) => {
 
     if (!phoneNumber || typeof phoneNumber !== "string") {
       return new Response(
-        JSON.stringify({ error: "phoneNumber is required" }),
-        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        JSON.stringify({ ok: false, error: "phoneNumber is required" }),
+        { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 
@@ -33,9 +33,10 @@ Deno.serve(async (req) => {
     if (!/^\+[1-9]\d{6,14}$/.test(e164)) {
       return new Response(
         JSON.stringify({
-          error: "Phone number must be in E.164 format (e.g. +919876543210)",
+          ok: false,
+          error: `Phone number must be in E.164 format (e.g. +919876543210). Received: "${e164}"`,
         }),
-        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 
@@ -83,8 +84,8 @@ Deno.serve(async (req) => {
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : "Unknown error";
     console.error("send-otp error:", msg);
-    return new Response(JSON.stringify({ error: msg }), {
-      status: 500,
+    return new Response(JSON.stringify({ ok: false, error: msg }), {
+      status: 200,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   }

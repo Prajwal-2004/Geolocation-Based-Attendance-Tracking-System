@@ -21,9 +21,23 @@ const VerificationDialog = ({ open, onClose, onVerified }: VerificationDialogPro
   const [devOtp, setDevOtp] = useState('');
   const [error, setError] = useState('');
 
+  // Normalize a phone number to E.164. If it's already +<digits>, keep it.
+  // Otherwise strip non-digits and assume India (+91) by default.
+  const toE164 = (raw?: string): string | null => {
+    if (!raw) return null;
+    const trimmed = raw.trim();
+    if (/^\+[1-9]\d{6,14}$/.test(trimmed)) return trimmed;
+    const digits = trimmed.replace(/\D/g, '');
+    if (!digits) return null;
+    if (digits.length === 10) return `+91${digits}`;
+    if (digits.length > 10 && digits.length <= 15) return `+${digits}`;
+    return null;
+  };
+
   const handleSendOtp = async () => {
-    if (!user?.phoneNumber) {
-      setError('No phone number registered. Please update your profile.');
+    const e164 = toE164(user?.phoneNumber);
+    if (!e164) {
+      setError(`Invalid phone number on file: "${user?.phoneNumber ?? ''}". Please update your profile.`);
       return;
     }
     setIsLoading(true);
@@ -31,7 +45,7 @@ const VerificationDialog = ({ open, onClose, onVerified }: VerificationDialogPro
 
     try {
       const { data, error: fnError } = await supabase.functions.invoke('send-otp', {
-        body: { phoneNumber: user.phoneNumber },
+        body: { phoneNumber: e164 },
       });
 
       if (fnError) throw new Error(fnError.message);
@@ -39,7 +53,7 @@ const VerificationDialog = ({ open, onClose, onVerified }: VerificationDialogPro
 
       if (data?.devOtp) {
         setDevOtp(data.devOtp);
-        console.log(`[DEV] OTP for ${user.phoneNumber}: ${data.devOtp}`);
+        console.log(`[DEV] OTP for ${e164}: ${data.devOtp}`);
       }
       setOtpSent(true);
     } catch (e: unknown) {
@@ -51,13 +65,14 @@ const VerificationDialog = ({ open, onClose, onVerified }: VerificationDialogPro
   };
 
   const handleVerifyOtp = async () => {
-    if (!user?.phoneNumber) return;
+    const e164 = toE164(user?.phoneNumber);
+    if (!e164) return;
     setError('');
     setIsVerifying(true);
 
     try {
       const { data, error: fnError } = await supabase.functions.invoke('verify-otp', {
-        body: { phoneNumber: user.phoneNumber, otp: otpCode },
+        body: { phoneNumber: e164, otp: otpCode },
       });
 
       if (fnError) throw new Error(fnError.message);
