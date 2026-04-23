@@ -150,20 +150,10 @@ const VerificationDialog = ({ open, onClose, onVerified }: VerificationDialogPro
             <>
               <div className="text-center">
                 <CheckCircle2 className="h-8 w-8 text-primary mx-auto mb-2" />
-                <p className="text-sm font-medium">OTP Generated!</p>
+                <p className="text-sm font-medium">Code sent</p>
                 <p className="text-xs text-muted-foreground mt-1">
-                  Enter the 6-digit code for ***{user?.phoneNumber?.slice(-4)}
+                  Check your notifications. Enter the 6-digit code sent to ***{user?.phoneNumber?.slice(-4)}
                 </p>
-                {devOtp && (
-                  <div className="mt-3 rounded-xl bg-accent/10 border border-accent/30 p-3">
-                    <p className="text-xs text-accent font-medium mb-1">
-                      Demo mode — your OTP is:
-                    </p>
-                    <p className="text-2xl font-mono font-bold tracking-[0.3em] text-accent">
-                      {devOtp}
-                    </p>
-                  </div>
-                )}
               </div>
               <Input
                 value={otpCode}
@@ -173,7 +163,7 @@ const VerificationDialog = ({ open, onClose, onVerified }: VerificationDialogPro
                 maxLength={6}
               />
               <div className="flex gap-2">
-                <Button variant="outline" className="flex-1 rounded-xl" onClick={() => { setOtpSent(false); setOtpCode(''); setDevOtp(''); setError(''); }} disabled={isVerifying}>
+                <Button variant="outline" className="flex-1 rounded-xl" onClick={() => { setOtpSent(false); setOtpCode(''); setError(''); }} disabled={isVerifying}>
                   Resend
                 </Button>
                 <Button
