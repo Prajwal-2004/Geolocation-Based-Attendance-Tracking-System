@@ -1,5 +1,6 @@
-import { useState, useMemo } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -8,8 +9,9 @@ import { LogIn, LogOut, Clock, CheckCircle2, XCircle, Navigation, Menu, Shield, 
 import { useToast } from '@/hooks/use-toast';
 import { getCurrentLocation } from '@/lib/geofence';
 import { validateLocation, validateTimestamp, checkGpsAccuracy } from '@/lib/geofence';
+import { getLocationPermissionState, requestLocationPermission, type LocationPermissionState } from '@/lib/location-permissions';
 import { getGeofences, getAttendanceRecords, addAttendanceRecord, updateAttendanceRecord, addAnomaly } from '@/lib/storage';
-import { AttendanceRecord, LocationData, Geofence } from '@/types';
+import { AttendanceRecord, LocationData } from '@/types';
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from '@/components/ui/sheet';
 import { useNavigate } from 'react-router-dom';
 import VerificationDialog from '@/components/VerificationDialog';
@@ -20,7 +22,9 @@ const Dashboard = () => {
   const navigate = useNavigate();
   const [isLoading, setIsLoading] = useState(false);
   const [isCapturing, setIsCapturing] = useState(false);
+  const [isRequestingPermission, setIsRequestingPermission] = useState(false);
   const [capturedLocation, setCapturedLocation] = useState<LocationData | null>(null);
+  const [locationPermission, setLocationPermission] = useState<LocationPermissionState>('prompt');
   const [selectedGeofenceId, setSelectedGeofenceId] = useState<string>('');
   const activeGeofences = useMemo(() => getGeofences().filter(g => g.isActive), []);
   const [records, setRecords] = useState<AttendanceRecord[]>(() =>
@@ -32,11 +36,43 @@ const Dashboard = () => {
   const [showVerification, setShowVerification] = useState(false);
   const [pendingCheckIn, setPendingCheckIn] = useState(false);
 
+  const refreshLocationPermission = async () => {
+    try {
+      setLocationPermission(await getLocationPermissionState());
+    } catch {
+      setLocationPermission('prompt');
+    }
+  };
+
+  useEffect(() => {
+    void refreshLocationPermission();
+  }, []);
+
+  const handleEnableLocation = async () => {
+    setIsRequestingPermission(true);
+    try {
+      const status = await requestLocationPermission();
+      setLocationPermission(status);
+
+      if (status === 'granted') {
+        toast({ title: 'Location enabled', description: 'This phone can now share GPS for attendance.' });
+      } else if (status === 'denied') {
+        toast({ title: 'Location blocked', description: 'Allow location for this app in your phone settings, then try again.', variant: 'destructive' });
+      }
+    } catch (err: any) {
+      toast({ title: 'Location error', description: err.message, variant: 'destructive' });
+    } finally {
+      setIsRequestingPermission(false);
+      void refreshLocationPermission();
+    }
+  };
+
   const handleCaptureLocation = async () => {
     setIsCapturing(true);
     setCapturedLocation(null);
     try {
       const location = await getCurrentLocation(30, 15000);
+      setLocationPermission('granted');
       setCapturedLocation(location);
       const accuracyNote = location.accuracy > 30
         ? ` (accuracy: ~${Math.round(location.accuracy)}m — try moving outdoors for better GPS)`
@@ -44,8 +80,10 @@ const Dashboard = () => {
       toast({ title: 'Location captured', description: `GPS coordinates acquired${accuracyNote}` });
     } catch (err: any) {
       toast({ title: 'Error', description: err.message, variant: 'destructive' });
+    } finally {
+      setIsCapturing(false);
+      void refreshLocationPermission();
     }
-    setIsCapturing(false);
   };
 
   const handleCheckIn = async () => {
@@ -214,6 +252,29 @@ const Dashboard = () => {
       </header>
 
       <main className="p-4 max-w-lg mx-auto space-y-5 pb-8">
+        {!isAdmin && locationPermission !== 'granted' && (
+          <Alert className="border-border/30 bg-card/70 backdrop-blur-sm">
+            <Navigation className="h-4 w-4" />
+            <AlertTitle>Enable location on this phone</AlertTitle>
+            <AlertDescription className="space-y-3">
+              <p>
+                {locationPermission === 'denied'
+                  ? 'Location access is blocked right now. Allow it for this app in Android settings, then return here.'
+                  : 'Grant location access before capturing attendance so the app can read your GPS position.'}
+              </p>
+              <Button
+                onClick={handleEnableLocation}
+                disabled={isRequestingPermission}
+                variant="outline"
+                className="w-full rounded-xl sm:w-auto"
+              >
+                <Navigation className="mr-2 h-4 w-4" />
+                {isRequestingPermission ? 'Requesting access...' : 'Enable Location'}
+              </Button>
+            </AlertDescription>
+          </Alert>
+        )}
+
         {/* Status Card — hidden for admins */}
         {!isAdmin && (
           <Card className="border-border/30 overflow-hidden shadow-xl shadow-primary/5">
