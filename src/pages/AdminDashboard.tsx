@@ -1,4 +1,5 @@
-import { useState, useMemo } from 'react';
+import { useEffect, useMemo, useState } from 'react';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -12,6 +13,7 @@ import { useToast } from '@/hooks/use-toast';
 import { useNavigate } from 'react-router-dom';
 import { getGeofences, addGeofence, deleteGeofence, updateGeofence, getAttendanceRecords, getAnomalies, getUsers } from '@/lib/storage';
 import { getCurrentLocation } from '@/lib/geofence';
+import { getLocationPermissionState, requestLocationPermission, type LocationPermissionState } from '@/lib/location-permissions';
 import { Geofence, AttendanceRecord, AnomalyLog, User as AppUser } from '@/types';
 
 const AdminDashboard = () => {
@@ -32,6 +34,8 @@ const AdminDashboard = () => {
   const [gAccuracy, setGAccuracy] = useState('');
   const [gClassTime, setGClassTime] = useState('');
   const [selectedTeacherId, setSelectedTeacherId] = useState('');
+  const [locationPermission, setLocationPermission] = useState<LocationPermissionState>('prompt');
+  const [isRequestingPermission, setIsRequestingPermission] = useState(false);
   const [corners, setCorners] = useState<Array<{ lat: string; lon: string }>>([
     { lat: '', lon: '' },
     { lat: '', lon: '' },
@@ -40,10 +44,42 @@ const AdminDashboard = () => {
   ]);
   const [capturingCorner, setCapturingCorner] = useState<number | null>(null);
 
+  const refreshLocationPermission = async () => {
+    try {
+      setLocationPermission(await getLocationPermissionState());
+    } catch {
+      setLocationPermission('prompt');
+    }
+  };
+
+  useEffect(() => {
+    void refreshLocationPermission();
+  }, []);
+
+  const handleEnableLocation = async () => {
+    setIsRequestingPermission(true);
+    try {
+      const status = await requestLocationPermission();
+      setLocationPermission(status);
+
+      if (status === 'granted') {
+        toast({ title: 'Location enabled', description: 'GPS access is ready for corner capture.' });
+      } else if (status === 'denied') {
+        toast({ title: 'Location blocked', description: 'Allow location for this app in Android settings, then come back.', variant: 'destructive' });
+      }
+    } catch (err: any) {
+      toast({ title: 'Location error', description: err.message, variant: 'destructive' });
+    } finally {
+      setIsRequestingPermission(false);
+      void refreshLocationPermission();
+    }
+  };
+
   const captureCornerLocation = async (index: number) => {
     setCapturingCorner(index);
     try {
       const location = await getCurrentLocation();
+      setLocationPermission('granted');
       const updated = [...corners];
       updated[index] = {
         lat: location.latitude.toFixed(6),
@@ -53,8 +89,10 @@ const AdminDashboard = () => {
       toast({ title: `Corner ${index + 1} captured`, description: `${location.latitude.toFixed(6)}, ${location.longitude.toFixed(6)}` });
     } catch (err: any) {
       toast({ title: 'Location error', description: err.message, variant: 'destructive' });
+    } finally {
+      setCapturingCorner(null);
+      void refreshLocationPermission();
     }
-    setCapturingCorner(null);
   };
 
   const handleAddGeofence = (e: React.FormEvent) => {
@@ -170,6 +208,30 @@ const AdminDashboard = () => {
 
           {/* Geofences Tab */}
           <TabsContent value="geofences" className="space-y-4">
+            {locationPermission !== 'granted' && (
+              <Alert className="border-border/30 bg-card/70 backdrop-blur-sm">
+                <Crosshair className="h-4 w-4" />
+                <AlertTitle>Enable location before capturing corners</AlertTitle>
+                <AlertDescription className="space-y-3">
+                  <p>
+                    {locationPermission === 'denied'
+                      ? 'Location access is currently blocked for this app. Turn it on in Android settings, then return here.'
+                      : 'Use this once on your phone to allow GPS access for zone setup.'}
+                  </p>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={handleEnableLocation}
+                    disabled={isRequestingPermission}
+                    className="w-full rounded-xl sm:w-auto"
+                  >
+                    <Crosshair className="mr-2 h-4 w-4" />
+                    {isRequestingPermission ? 'Requesting access...' : 'Enable Location'}
+                  </Button>
+                </AlertDescription>
+              </Alert>
+            )}
+
             <Card className="border-border/30 shadow-lg">
               <CardHeader className="pb-3">
                 <CardTitle className="text-base tracking-tight">Add Geofence Zone</CardTitle>
