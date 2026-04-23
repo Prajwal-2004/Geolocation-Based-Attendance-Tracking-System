@@ -1,10 +1,11 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { MessageSquare, Loader2, CheckCircle2, XCircle, ShieldCheck } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
+import { deliverOtp, requestNotificationPermission } from '@/lib/otp-delivery';
 
 interface VerificationDialogProps {
   open: boolean;
@@ -18,8 +19,13 @@ const VerificationDialog = ({ open, onClose, onVerified }: VerificationDialogPro
   const [isVerifying, setIsVerifying] = useState(false);
   const [otpSent, setOtpSent] = useState(false);
   const [otpCode, setOtpCode] = useState('');
-  const [devOtp, setDevOtp] = useState('');
   const [error, setError] = useState('');
+
+  // Pre-prompt for notification permission as soon as the dialog opens, so the
+  // very first OTP can already arrive as a system notification.
+  useEffect(() => {
+    if (open) void requestNotificationPermission();
+  }, [open]);
 
   // Normalize a phone number to E.164. If it's already +<digits>, keep it.
   // Otherwise strip non-digits and assume India (+91) by default.
@@ -52,7 +58,8 @@ const VerificationDialog = ({ open, onClose, onVerified }: VerificationDialogPro
       if (data?.error) throw new Error(data.error);
 
       if (data?.devOtp) {
-        setDevOtp(data.devOtp);
+        // Deliver via system notification + SMS-styled toast.
+        await deliverOtp(data.devOtp, e164);
         console.log(`[DEV] OTP for ${e164}: ${data.devOtp}`);
       }
       setOtpSent(true);
@@ -96,7 +103,6 @@ const VerificationDialog = ({ open, onClose, onVerified }: VerificationDialogPro
     setIsVerifying(false);
     setOtpSent(false);
     setOtpCode('');
-    setDevOtp('');
     setError('');
   };
 
@@ -150,20 +156,10 @@ const VerificationDialog = ({ open, onClose, onVerified }: VerificationDialogPro
             <>
               <div className="text-center">
                 <CheckCircle2 className="h-8 w-8 text-primary mx-auto mb-2" />
-                <p className="text-sm font-medium">OTP Generated!</p>
+                <p className="text-sm font-medium">Code sent</p>
                 <p className="text-xs text-muted-foreground mt-1">
-                  Enter the 6-digit code for ***{user?.phoneNumber?.slice(-4)}
+                  Check your notifications. Enter the 6-digit code sent to ***{user?.phoneNumber?.slice(-4)}
                 </p>
-                {devOtp && (
-                  <div className="mt-3 rounded-xl bg-accent/10 border border-accent/30 p-3">
-                    <p className="text-xs text-accent font-medium mb-1">
-                      Demo mode — your OTP is:
-                    </p>
-                    <p className="text-2xl font-mono font-bold tracking-[0.3em] text-accent">
-                      {devOtp}
-                    </p>
-                  </div>
-                )}
               </div>
               <Input
                 value={otpCode}
@@ -173,7 +169,7 @@ const VerificationDialog = ({ open, onClose, onVerified }: VerificationDialogPro
                 maxLength={6}
               />
               <div className="flex gap-2">
-                <Button variant="outline" className="flex-1 rounded-xl" onClick={() => { setOtpSent(false); setOtpCode(''); setDevOtp(''); setError(''); }} disabled={isVerifying}>
+                <Button variant="outline" className="flex-1 rounded-xl" onClick={() => { setOtpSent(false); setOtpCode(''); setError(''); }} disabled={isVerifying}>
                   Resend
                 </Button>
                 <Button
