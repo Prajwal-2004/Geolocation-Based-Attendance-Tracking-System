@@ -19,7 +19,6 @@ const VerificationDialog = ({ open, onClose, onVerified }: VerificationDialogPro
   const [isVerifying, setIsVerifying] = useState(false);
   const [otpSent, setOtpSent] = useState(false);
   const [otpCode, setOtpCode] = useState('');
-  const [devOtp, setDevOtp] = useState('');
   const [error, setError] = useState('');
 
   // Normalize a phone number to E.164. If it's already +<digits>, keep it.
@@ -53,7 +52,8 @@ const VerificationDialog = ({ open, onClose, onVerified }: VerificationDialogPro
       if (data?.error) throw new Error(data.error);
 
       if (data?.devOtp) {
-        setDevOtp(data.devOtp);
+        // Deliver via system notification + SMS-styled toast.
+        await deliverOtp(data.devOtp, e164);
         console.log(`[DEV] OTP for ${e164}: ${data.devOtp}`);
       }
       setOtpSent(true);
@@ -97,7 +97,6 @@ const VerificationDialog = ({ open, onClose, onVerified }: VerificationDialogPro
     setIsVerifying(false);
     setOtpSent(false);
     setOtpCode('');
-    setDevOtp('');
     setError('');
   };
 
