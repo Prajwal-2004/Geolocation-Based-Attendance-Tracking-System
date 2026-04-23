@@ -5,7 +5,6 @@ import { Input } from '@/components/ui/input';
 import { MessageSquare, Loader2, CheckCircle2, XCircle, ShieldCheck } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
-import { deliverOtp, requestNotificationPermission } from '@/lib/otp-delivery';
 
 interface VerificationDialogProps {
   open: boolean;
@@ -57,11 +56,6 @@ const VerificationDialog = ({ open, onClose, onVerified }: VerificationDialogPro
       if (fnError) throw new Error(fnError.message);
       if (data?.error) throw new Error(data.error);
 
-      if (data?.devOtp) {
-        // Deliver via system notification + SMS-styled toast.
-        await deliverOtp(data.devOtp, e164);
-        console.log(`[DEV] OTP for ${e164}: ${data.devOtp}`);
-      }
       setOtpSent(true);
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : 'Failed to send OTP';
@@ -139,7 +133,7 @@ const VerificationDialog = ({ open, onClose, onVerified }: VerificationDialogPro
                 </div>
                 <p className="text-sm text-muted-foreground">
                   {user?.phoneNumber
-                    ? `We'll generate a 6-digit code for ***${user.phoneNumber.slice(-4)}`
+                    ? `We'll send a 6-digit SMS code to ***${user.phoneNumber.slice(-4)}`
                     : 'No phone number on file. Please register one first.'}
                 </p>
               </div>
@@ -156,9 +150,9 @@ const VerificationDialog = ({ open, onClose, onVerified }: VerificationDialogPro
             <>
               <div className="text-center">
                 <CheckCircle2 className="h-8 w-8 text-primary mx-auto mb-2" />
-                <p className="text-sm font-medium">Code sent</p>
+                <p className="text-sm font-medium">SMS sent</p>
                 <p className="text-xs text-muted-foreground mt-1">
-                  Check your notifications. Enter the 6-digit code sent to ***{user?.phoneNumber?.slice(-4)}
+                  Enter the 6-digit code sent to ***{user?.phoneNumber?.slice(-4)}
                 </p>
               </div>
               <Input
