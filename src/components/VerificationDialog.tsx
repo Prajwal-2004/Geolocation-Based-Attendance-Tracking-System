@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { MessageSquare, Loader2, CheckCircle2, XCircle, ShieldCheck } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
+import { supabase } from '@/integrations/supabase/client';
 
 interface VerificationDialogProps {
   open: boolean;
@@ -14,12 +15,13 @@ interface VerificationDialogProps {
 const VerificationDialog = ({ open, onClose, onVerified }: VerificationDialogProps) => {
   const { user } = useAuth();
   const [isLoading, setIsLoading] = useState(false);
+  const [isVerifying, setIsVerifying] = useState(false);
   const [otpSent, setOtpSent] = useState(false);
   const [otpCode, setOtpCode] = useState('');
-  const [generatedOtp, setGeneratedOtp] = useState('');
+  const [devOtp, setDevOtp] = useState('');
   const [error, setError] = useState('');
 
-  const handleSendOtp = () => {
+  const handleSendOtp = async () => {
     if (!user?.phoneNumber) {
       setError('No phone number registered. Please update your profile.');
       return;
@@ -27,30 +29,59 @@ const VerificationDialog = ({ open, onClose, onVerified }: VerificationDialogPro
     setIsLoading(true);
     setError('');
 
-    const otp = Math.floor(100000 + Math.random() * 900000).toString();
-    setGeneratedOtp(otp);
+    try {
+      const { data, error: fnError } = await supabase.functions.invoke('send-otp', {
+        body: { phoneNumber: user.phoneNumber },
+      });
 
-    setTimeout(() => {
+      if (fnError) throw new Error(fnError.message);
+      if (data?.error) throw new Error(data.error);
+
+      if (data?.devOtp) {
+        setDevOtp(data.devOtp);
+        console.log(`[DEV] OTP for ${user.phoneNumber}: ${data.devOtp}`);
+      }
       setOtpSent(true);
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : 'Failed to send OTP';
+      setError(msg);
+    } finally {
       setIsLoading(false);
-      console.log(`[DEV] OTP for ${user.phoneNumber}: ${otp}`);
-    }, 1500);
+    }
   };
 
-  const handleVerifyOtp = () => {
+  const handleVerifyOtp = async () => {
+    if (!user?.phoneNumber) return;
     setError('');
-    if (otpCode === generatedOtp) {
-      onVerified();
-    } else {
-      setError('Invalid OTP. Please try again.');
+    setIsVerifying(true);
+
+    try {
+      const { data, error: fnError } = await supabase.functions.invoke('verify-otp', {
+        body: { phoneNumber: user.phoneNumber, otp: otpCode },
+      });
+
+      if (fnError) throw new Error(fnError.message);
+      if (data?.error) throw new Error(data.error);
+
+      if (data?.verified) {
+        onVerified();
+      } else {
+        setError('Invalid OTP. Please try again.');
+      }
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : 'Verification failed';
+      setError(msg);
+    } finally {
+      setIsVerifying(false);
     }
   };
 
   const resetState = () => {
     setIsLoading(false);
+    setIsVerifying(false);
     setOtpSent(false);
     setOtpCode('');
-    setGeneratedOtp('');
+    setDevOtp('');
     setError('');
   };
 
@@ -87,7 +118,7 @@ const VerificationDialog = ({ open, onClose, onVerified }: VerificationDialogPro
                 </div>
                 <p className="text-sm text-muted-foreground">
                   {user?.phoneNumber
-                    ? `We'll send a 6-digit code to ***${user.phoneNumber.slice(-4)}`
+                    ? `We'll generate a 6-digit code for ***${user.phoneNumber.slice(-4)}`
                     : 'No phone number on file. Please register one first.'}
                 </p>
               </div>
@@ -104,13 +135,20 @@ const VerificationDialog = ({ open, onClose, onVerified }: VerificationDialogPro
             <>
               <div className="text-center">
                 <CheckCircle2 className="h-8 w-8 text-primary mx-auto mb-2" />
-                <p className="text-sm font-medium">OTP Sent!</p>
+                <p className="text-sm font-medium">OTP Generated!</p>
                 <p className="text-xs text-muted-foreground mt-1">
-                  Enter the 6-digit code sent to ***{user?.phoneNumber?.slice(-4)}
+                  Enter the 6-digit code for ***{user?.phoneNumber?.slice(-4)}
                 </p>
-                <p className="text-xs text-amber-500 mt-2 font-medium">
-                  Demo mode: Check browser console for OTP
-                </p>
+                {devOtp && (
+                  <div className="mt-3 rounded-xl bg-amber-500/10 border border-amber-500/30 p-3">
+                    <p className="text-xs text-amber-600 dark:text-amber-400 font-medium mb-1">
+                      Demo mode — your OTP is:
+                    </p>
+                    <p className="text-2xl font-mono font-bold tracking-[0.3em] text-amber-700 dark:text-amber-300">
+                      {devOtp}
+                    </p>
+                  </div>
+                )}
               </div>
               <Input
                 value={otpCode}
@@ -120,14 +158,15 @@ const VerificationDialog = ({ open, onClose, onVerified }: VerificationDialogPro
                 maxLength={6}
               />
               <div className="flex gap-2">
-                <Button variant="outline" className="flex-1 rounded-xl" onClick={() => { setOtpSent(false); setOtpCode(''); setError(''); }}>
+                <Button variant="outline" className="flex-1 rounded-xl" onClick={() => { setOtpSent(false); setOtpCode(''); setDevOtp(''); setError(''); }} disabled={isVerifying}>
                   Resend
                 </Button>
                 <Button
                   className="flex-1 rounded-xl"
                   onClick={handleVerifyOtp}
-                  disabled={otpCode.length !== 6}
+                  disabled={otpCode.length !== 6 || isVerifying}
                 >
+                  {isVerifying ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
                   Verify
                 </Button>
               </div>
