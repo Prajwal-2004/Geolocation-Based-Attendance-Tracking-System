@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -19,12 +19,6 @@ const VerificationDialog = ({ open, onClose, onVerified }: VerificationDialogPro
   const [otpSent, setOtpSent] = useState(false);
   const [otpCode, setOtpCode] = useState('');
   const [error, setError] = useState('');
-
-  // Pre-prompt for notification permission as soon as the dialog opens, so the
-  // very first OTP can already arrive as a system notification.
-  useEffect(() => {
-    if (open) void requestNotificationPermission();
-  }, [open]);
 
   // Normalize a phone number to E.164. If it's already +<digits>, keep it.
   // Otherwise strip non-digits and assume India (+91) by default.
