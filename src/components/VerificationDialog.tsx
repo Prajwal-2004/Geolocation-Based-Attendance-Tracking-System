@@ -140,11 +140,11 @@ const VerificationDialog = ({ open, onClose, onVerified }: VerificationDialogPro
                   Enter the 6-digit code for ***{user?.phoneNumber?.slice(-4)}
                 </p>
                 {devOtp && (
-                  <div className="mt-3 rounded-xl bg-amber-500/10 border border-amber-500/30 p-3">
-                    <p className="text-xs text-amber-600 dark:text-amber-400 font-medium mb-1">
+                  <div className="mt-3 rounded-xl bg-accent/10 border border-accent/30 p-3">
+                    <p className="text-xs text-accent font-medium mb-1">
                       Demo mode — your OTP is:
                     </p>
-                    <p className="text-2xl font-mono font-bold tracking-[0.3em] text-amber-700 dark:text-amber-300">
+                    <p className="text-2xl font-mono font-bold tracking-[0.3em] text-accent">
                       {devOtp}
                     </p>
                   </div>
