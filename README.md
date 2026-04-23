@@ -216,6 +216,73 @@ npm run dev
 
 ---
 
+## 📱 Running as a Native Android App (Capacitor)
+
+This project is configured with **Capacitor** so it can be deployed as a real native Android (or iOS) app, with full access to device features like GPS, camera, and notifications.
+
+### Prerequisites for Android
+- **Node.js** (v18+) and **npm** — [Download](https://nodejs.org/)
+- **Android Studio** — [Download](https://developer.android.com/studio) (includes Android SDK & emulator)
+- **Java JDK 17+** — usually bundled with Android Studio
+- A physical Android device (with USB debugging enabled) **or** an Android emulator from Android Studio
+
+### Step-by-Step Android Setup
+
+```bash
+# 1. Export the project to your own GitHub repository
+#    (use the "Export to GitHub" button in Lovable, then clone it locally)
+git clone <YOUR_GITHUB_REPO_URL>
+cd <YOUR_PROJECT_NAME>
+
+# 2. Install all dependencies
+npm install
+
+# 3. Add the Android native platform
+npx cap add android
+
+# 4. Update native dependencies for Android
+npx cap update android
+
+# 5. Build the web app
+npm run build
+
+# 6. Sync the built web assets into the Android project
+npx cap sync
+
+# 7. Run the app on a connected device or emulator
+npx cap run android
+```
+
+### Re-syncing After Code Changes
+
+Whenever you `git pull` new changes (or modify any web code), run:
+
+```bash
+npm run build
+npx cap sync
+```
+
+Then re-run `npx cap run android` to launch the updated app.
+
+### iOS (Optional, requires macOS)
+
+```bash
+npx cap add ios
+npx cap update ios
+npm run build
+npx cap sync
+npx cap run ios
+```
+> ⚠️ iOS development requires a **Mac with Xcode** installed.
+
+### Helpful Links
+- 📘 [Lovable Mobile Development Blog Post](https://lovable.dev/blogs/TODO)
+- 📗 [Capacitor Official Docs](https://capacitorjs.com/docs)
+- 📙 [Android Studio Setup Guide](https://developer.android.com/studio/install)
+- 📕 [Capacitor Android Guide](https://capacitorjs.com/docs/android)
+
+---
+
 ## 🔐 Default Login Credentials
 
 | Role | Email | Password |
