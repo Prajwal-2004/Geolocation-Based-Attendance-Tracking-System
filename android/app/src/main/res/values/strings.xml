@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">Geolocation Based Attendance Tracking System</string>
+    <string name="title_activity_main">Geolocation Based Attendance Tracking System</string>
+    <string name="package_name">com.example.geolocation</string>
+    <string name="custom_url_scheme">com.example.geolocation</string>
+</resources>
