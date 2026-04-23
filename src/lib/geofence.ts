@@ -1,4 +1,6 @@
 import { LocationData, Geofence, PolygonPoint } from '@/types';
+import { Geolocation } from '@capacitor/geolocation';
+import { Capacitor } from '@capacitor/core';
 
 /**
  * Haversine formula: calculates the great-circle distance between two points
@@ -107,12 +109,77 @@ export function checkGpsAccuracy(accuracy: number): boolean {
 }
 
 /**
- * Gets the user's current location using the browser Geolocation API.
- * Uses watchPosition to wait for the most accurate reading within the timeout.
- * This avoids the common issue where getCurrentPosition returns a cached,
- * low-accuracy (Wi-Fi/cell tower) fix before GPS has locked on.
+ * Native (Capacitor) location acquisition. Used on Android/iOS builds where the
+ * browser Geolocation API is unreliable inside a WebView. Requests OS-level
+ * permission, then watches for the most accurate reading within the timeout.
+ */
+async function getNativeLocation(maxAccuracy: number, timeoutMs: number): Promise<LocationData> {
+  // Request permission first — required on Android 6+ and iOS.
+  const perm = await Geolocation.checkPermissions();
+  if (perm.location !== 'granted') {
+    const req = await Geolocation.requestPermissions({ permissions: ['location'] });
+    if (req.location !== 'granted') {
+      throw new Error('Location permission denied. Please enable GPS for this app in Settings.');
+    }
+  }
+
+  return new Promise<LocationData>((resolve, reject) => {
+    let bestResult: LocationData | null = null;
+    let watchId: string | null = null;
+
+    const cleanup = async () => {
+      if (watchId) {
+        try { await Geolocation.clearWatch({ id: watchId }); } catch { /* ignore */ }
+        watchId = null;
+      }
+    };
+
+    const timer = setTimeout(async () => {
+      await cleanup();
+      if (bestResult) resolve(bestResult);
+      else reject(new Error('Could not get an accurate location. Please try again outdoors.'));
+    }, timeoutMs);
+
+    Geolocation.watchPosition(
+      { enableHighAccuracy: true, timeout: timeoutMs, maximumAge: 0 },
+      (position, err) => {
+        if (err || !position) {
+          // Soft error — keep watching until timeout
+          return;
+        }
+        const current: LocationData = {
+          latitude: position.coords.latitude,
+          longitude: position.coords.longitude,
+          accuracy: position.coords.accuracy,
+          timestamp: position.timestamp,
+        };
+        if (!bestResult || current.accuracy < bestResult.accuracy) {
+          bestResult = current;
+        }
+        if (current.accuracy <= maxAccuracy) {
+          clearTimeout(timer);
+          cleanup().then(() => resolve(current));
+        }
+      }
+    ).then((id) => { watchId = id; }).catch(async (e) => {
+      clearTimeout(timer);
+      await cleanup();
+      reject(e instanceof Error ? e : new Error('Failed to start location watch.'));
+    });
+  });
+}
+
+/**
+ * Gets the user's current location.
+ * - On Capacitor native (Android/iOS): uses the @capacitor/geolocation plugin
+ *   so OS-level GPS permissions are properly requested.
+ * - On the web: uses navigator.geolocation.watchPosition for the most accurate fix.
  */
 export function getCurrentLocation(maxAccuracy: number = 30, timeoutMs: number = 15000): Promise<LocationData> {
+  if (Capacitor.isNativePlatform()) {
+    return getNativeLocation(maxAccuracy, timeoutMs);
+  }
+
   return new Promise((resolve, reject) => {
     if (!navigator.geolocation) {
       reject(new Error('Geolocation is not supported by this device'));
