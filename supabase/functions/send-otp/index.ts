@@ -6,8 +6,6 @@ const corsHeaders = {
     "authorization, x-client-info, apikey, content-type",
 };
 
-const GATEWAY_URL = "https://connector-gateway.lovable.dev/twilio";
-
 async function hashOtp(otp: string, phone: string): Promise<string> {
   const data = new TextEncoder().encode(`${otp}:${phone}`);
   const buf = await crypto.subtle.digest("SHA-256", data);
@@ -22,17 +20,6 @@ Deno.serve(async (req) => {
   }
 
   try {
-    const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
-    const TWILIO_API_KEY = Deno.env.get("TWILIO_API_KEY");
-    const TWILIO_FROM_NUMBER = Deno.env.get("TWILIO_FROM_NUMBER");
-
-    if (!LOVABLE_API_KEY) throw new Error("LOVABLE_API_KEY is not configured");
-    if (!TWILIO_API_KEY) throw new Error("TWILIO_API_KEY is not configured");
-    if (!TWILIO_FROM_NUMBER)
-      throw new Error(
-        "TWILIO_FROM_NUMBER is not configured. Add your Twilio phone number (E.164 format, e.g. +12025551234) as a secret."
-      );
-
     const { phoneNumber } = await req.json();
 
     if (!phoneNumber || typeof phoneNumber !== "string") {
@@ -42,7 +29,6 @@ Deno.serve(async (req) => {
       );
     }
 
-    // Basic E.164 validation
     const e164 = phoneNumber.trim();
     if (!/^\+[1-9]\d{6,14}$/.test(e164)) {
       return new Response(
@@ -75,42 +61,23 @@ Deno.serve(async (req) => {
       throw new Error(`Failed to store OTP: ${dbError.message}`);
     }
 
-    // Send via Twilio
-    const body = `Your GeoAttend verification code is ${otp}. Valid for 5 minutes. Do not share this code.`;
+    // SIMULATED DELIVERY — log to edge function console
+    console.log("==================================================");
+    console.log(`📱 [SIMULATED OTP] Phone: ${e164}`);
+    console.log(`🔑 [SIMULATED OTP] Code:  ${otp}`);
+    console.log(`⏱️  Valid for 5 minutes.`);
+    console.log("==================================================");
 
-    const twilioRes = await fetch(`${GATEWAY_URL}/Messages.json`, {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${LOVABLE_API_KEY}`,
-        "X-Connection-Api-Key": TWILIO_API_KEY,
-        "Content-Type": "application/x-www-form-urlencoded",
-      },
-      body: new URLSearchParams({
-        To: e164,
-        From: TWILIO_FROM_NUMBER,
-        Body: body,
-      }),
-    });
-
-    const twilioData = await twilioRes.json();
-
-    if (!twilioRes.ok) {
-      console.error("Twilio error:", twilioRes.status, twilioData);
-      return new Response(
-        JSON.stringify({
-          error: `Twilio failed [${twilioRes.status}]: ${
-            twilioData?.message || JSON.stringify(twilioData)
-          }`,
-          twilioCode: twilioData?.code,
-        }),
-        { status: 502, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
-    }
-
-    console.log(`OTP sent to ${e164}, Twilio SID: ${twilioData.sid}`);
-
+    // Also return the OTP in dev mode so the UI can surface it
     return new Response(
-      JSON.stringify({ success: true, sid: twilioData.sid }),
+      JSON.stringify({
+        success: true,
+        simulated: true,
+        // Returning the OTP here is OK because this is dev/demo mode.
+        // Remove `devOtp` if you ever wire up real SMS delivery.
+        devOtp: otp,
+        message: "OTP generated (simulated). Check edge function logs.",
+      }),
       { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   } catch (err: unknown) {
