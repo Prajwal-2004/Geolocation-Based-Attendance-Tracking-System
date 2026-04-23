@@ -6,12 +6,45 @@ const corsHeaders = {
     "authorization, x-client-info, apikey, content-type",
 };
 
+const TWILIO_GATEWAY_URL = "https://connector-gateway.lovable.dev/twilio";
+
 async function hashOtp(otp: string, phone: string): Promise<string> {
   const data = new TextEncoder().encode(`${otp}:${phone}`);
   const buf = await crypto.subtle.digest("SHA-256", data);
   return Array.from(new Uint8Array(buf))
     .map((b) => b.toString(16).padStart(2, "0"))
     .join("");
+}
+
+async function sendSmsViaTwilio(to: string, body: string) {
+  const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
+  if (!LOVABLE_API_KEY) throw new Error("LOVABLE_API_KEY is not configured");
+
+  const TWILIO_API_KEY = Deno.env.get("TWILIO_API_KEY");
+  if (!TWILIO_API_KEY) throw new Error("TWILIO_API_KEY is not configured (connect Twilio in Connectors)");
+
+  const TWILIO_FROM_NUMBER = Deno.env.get("TWILIO_FROM_NUMBER");
+  if (!TWILIO_FROM_NUMBER) throw new Error("TWILIO_FROM_NUMBER is not configured");
+
+  const res = await fetch(`${TWILIO_GATEWAY_URL}/Messages.json`, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${LOVABLE_API_KEY}`,
+      "X-Connection-Api-Key": TWILIO_API_KEY,
+      "Content-Type": "application/x-www-form-urlencoded",
+    },
+    body: new URLSearchParams({
+      To: to,
+      From: TWILIO_FROM_NUMBER,
+      Body: body,
+    }),
+  });
+
+  const data = await res.json();
+  if (!res.ok) {
+    throw new Error(`Twilio API error [${res.status}]: ${JSON.stringify(data)}`);
+  }
+  return data;
 }
 
 Deno.serve(async (req) => {
@@ -50,7 +83,7 @@ Deno.serve(async (req) => {
     const otpHash = await hashOtp(otp, e164);
     const expiresAt = new Date(Date.now() + 5 * 60 * 1000).toISOString();
 
-    // Store OTP
+    // Store OTP first so verify works even if SMS is slow
     const { error: dbError } = await supabase.from("phone_otps").insert({
       phone_number: e164,
       otp_hash: otpHash,
@@ -62,22 +95,26 @@ Deno.serve(async (req) => {
       throw new Error(`Failed to store OTP: ${dbError.message}`);
     }
 
-    // SIMULATED DELIVERY — log to edge function console
-    console.log("==================================================");
-    console.log(`📱 [SIMULATED OTP] Phone: ${e164}`);
-    console.log(`🔑 [SIMULATED OTP] Code:  ${otp}`);
-    console.log(`⏱️  Valid for 5 minutes.`);
-    console.log("==================================================");
+    // Send via Twilio
+    try {
+      const twilioRes = await sendSmsViaTwilio(
+        e164,
+        `SafeAttend: Your verification code is ${otp}. Valid for 5 minutes. Do not share this code.`
+      );
+      console.log(`Twilio message sent. SID: ${twilioRes.sid}`);
+    } catch (smsErr) {
+      const msg = smsErr instanceof Error ? smsErr.message : "Unknown SMS error";
+      console.error("Twilio send failed:", msg);
+      return new Response(
+        JSON.stringify({ ok: false, error: `Failed to send SMS: ${msg}` }),
+        { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
 
-    // Also return the OTP in dev mode so the UI can surface it
     return new Response(
       JSON.stringify({
         success: true,
-        simulated: true,
-        // Returning the OTP here is OK because this is dev/demo mode.
-        // Remove `devOtp` if you ever wire up real SMS delivery.
-        devOtp: otp,
-        message: "OTP generated (simulated). Check edge function logs.",
+        message: "OTP sent via SMS.",
       }),
       { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
