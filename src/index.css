@@ -86,3 +86,22 @@
 ::-webkit-scrollbar-thumb:hover {
   background: hsl(217 91% 52%);
 }
+
+/* SMS-style toast — looks like an iMessage/SMS bubble notification */
+.sms-toast {
+  border-left: 3px solid hsl(var(--primary)) !important;
+  background: hsl(var(--card)) !important;
+  box-shadow: 0 10px 30px -10px hsl(var(--primary) / 0.35) !important;
+}
+.sms-toast [data-title] {
+  font-weight: 600;
+  font-size: 0.8125rem;
+  color: hsl(var(--primary));
+  letter-spacing: 0.02em;
+}
+.sms-toast [data-description] {
+  font-family: 'JetBrains Mono', ui-monospace, monospace;
+  font-size: 0.875rem;
+  white-space: pre-line;
+  color: hsl(var(--foreground));
+}
