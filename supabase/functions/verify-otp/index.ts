@@ -24,8 +24,8 @@ Deno.serve(async (req) => {
 
     if (!phoneNumber || !otp) {
       return new Response(
-        JSON.stringify({ error: "phoneNumber and otp are required" }),
-        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        JSON.stringify({ ok: false, error: "phoneNumber and otp are required" }),
+        { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 
@@ -34,8 +34,8 @@ Deno.serve(async (req) => {
 
     if (!/^\d{6}$/.test(code)) {
       return new Response(
-        JSON.stringify({ error: "OTP must be 6 digits" }),
-        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        JSON.stringify({ ok: false, error: "OTP must be 6 digits" }),
+        { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 
@@ -57,8 +57,8 @@ Deno.serve(async (req) => {
 
     if (!rows || rows.length === 0) {
       return new Response(
-        JSON.stringify({ error: "No active OTP found. Please request a new one." }),
-        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        JSON.stringify({ ok: false, error: "No active OTP found. Please request a new one." }),
+        { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 
@@ -67,16 +67,16 @@ Deno.serve(async (req) => {
     // Expiry check
     if (new Date(record.expires_at).getTime() < Date.now()) {
       return new Response(
-        JSON.stringify({ error: "OTP has expired. Please request a new one." }),
-        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        JSON.stringify({ ok: false, error: "OTP has expired. Please request a new one." }),
+        { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 
     // Attempt limit
     if (record.attempts >= 5) {
       return new Response(
-        JSON.stringify({ error: "Too many attempts. Please request a new OTP." }),
-        { status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        JSON.stringify({ ok: false, error: "Too many attempts. Please request a new OTP." }),
+        { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 
@@ -90,10 +90,11 @@ Deno.serve(async (req) => {
 
       return new Response(
         JSON.stringify({
+          ok: false,
           error: "Invalid OTP",
           attemptsLeft: Math.max(0, 5 - (record.attempts + 1)),
         }),
-        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 
@@ -104,7 +105,7 @@ Deno.serve(async (req) => {
       .eq("id", record.id);
 
     return new Response(
-      JSON.stringify({ success: true, verified: true }),
+      JSON.stringify({ ok: true, success: true, verified: true }),
       { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   } catch (err: unknown) {
